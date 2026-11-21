@@ -129,7 +129,7 @@ Vollständige Checkliste: `tests-und-qualitaet.md`. Mindestens:
 ## Git
 
 - Jedes Projekt ist ein eigenes privates Repo bei GitHub (`f7or7an`). Vorhanden: Gora, `vogelperspektive`, `vogelperspektive-praxisraum`. FlowTech hat ein Repo ohne Commit, Ortrud keins → nachholen.
-- **Meta-Repo** `f7or7an/websites` (lokal angelegt 21.11.2026; für Versionierung und Cloud-Sessions): nur `CLAUDE.md`, `SERVER.md`, `.claude/rules/`, `vorlagen/`, `_bausteine/`, `entscheidungen/` (Beschlusslisten mit Quellen). Projektordner per `.gitignore` ausgeschlossen.
+- **Meta-Repo** `f7or7an/web-dev` (Websites und Webapps, angelegt 21.11.2026; für Versionierung und Cloud-Sessions): nur `CLAUDE.md`, `SERVER.md`, `.claude/rules/`, `vorlagen/`, `_bausteine/`, `entscheidungen/` (Beschlusslisten mit Quellen). Projektordner per `.gitignore` ausgeschlossen.
 - **Conventional Commits** (`feat:`, `fix:`, `chore(deps):` …), kein commitlint nötig. Für den Layer Pflicht.
 - Nicht ins Repo: `node_modules`, `.nuxt`, `.output`, `dist`, `.data`, `*.sqlite*`, `.env*` (außer `.env.example`), Logs, Arbeitsdateien.
 - Arbeitsdateien (Hilfsskripte, Screenshots, Build-Logs) gehören in den Scratchpad der Session, nicht in den Projektordner.

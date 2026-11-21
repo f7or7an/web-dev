@@ -551,7 +551,7 @@ Website und Praxisraum tauschen Daten aus (`/api/internal/*`: Namen, E-Mail-Adre
 1. ~~Neuer VPS oder der vorhandene Server `92.205.163.18`?~~ Entschieden 21.11.2026: neuer VPS mit Ubuntu 26.04 LTS, dazu ein eigener Praxisraum-Server (13.1).
 2. VPS-Anbieter und Ziel für das externe Backup (Webserver).
 3. Anbieter und Rechenzentrum des Praxisraum-Servers, Größe nach den ersten Messungen, inklusiver Datenverkehr.
-4. Wo die Serverdateien versioniert liegen (`/srv/proxy/compose.yml`, `Caddyfile`, Snapshot-Skript, systemd-Units, WireGuard ohne Schlüssel), damit Renovate das Caddy-Image aktualisiert. Vorschlag: im Meta-Repo `f7or7an/websites` unter `server/`.
+4. Wo die Serverdateien versioniert liegen (`/srv/proxy/compose.yml`, `Caddyfile`, Snapshot-Skript, systemd-Units, WireGuard ohne Schlüssel), damit Renovate das Caddy-Image aktualisiert. Vorschlag: im Meta-Repo `f7or7an/web-dev` unter `server/`.
 5. Details der Server-Verbindung (2.15): Adressen, HMAC oder Dienst-Schlüssel, Persistenz der `DOCKER-USER`-Regel.
 6. LiveKit: Host-Netzwerk ja/nein (nach Messung), TURN über TLS für strenge Firmennetze (443 nur mit zweiter IP oder caddy-l4, sonst 5349).
 7. Wo die DNS-Zonen der Domains liegen und wer Zugriff hat (bekannt: Gora bei Wix; offen: Vogelperspektive, FlowTech, Ortrud).

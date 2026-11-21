@@ -1,6 +1,7 @@
 # Meta-Repo: nur gemeinsame Regeln, Vorlagen und Bausteine. Projektordner sind eigene Repos.
 /*
 !/.gitignore
+!/.gitattributes
 !/CLAUDE.md
 !/SERVER.md
 !/.claude/

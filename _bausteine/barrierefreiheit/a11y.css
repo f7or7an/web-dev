@@ -1,0 +1,43 @@
+/*
+ * Gemeinsame Barrierefreiheits-Grundlagen (WCAG 2.2 AA)
+ * Quelle: WebSites/_bausteine/barrierefreiheit/a11y.css – Änderungen dort pflegen und in die Projekte übernehmen.
+ * Einbinden: in main.css direkt nach `@import "tailwindcss";` mit `@import "./a11y.css";`
+ * Projektwert setzen: `--header-height` in :root = Höhe des Sticky-Headers (sonst 5rem).
+ */
+
+@layer base {
+  html {
+    /* Sticky-Header darf Sprungziele und fokussierte Elemente nicht verdecken (WCAG 2.4.11) */
+    scroll-padding-top: calc(var(--header-height, 5rem) + 0.5rem);
+  }
+
+  /* Sichtbarer Fokus für alles ohne eigenen Fokusstil (WCAG 2.4.7, Kontrast über --ring ≥ 3:1, WCAG 1.4.11).
+     shadcn-Komponenten setzen eigene Ringe – dort muss `ring-ring` ohne Deckkraft-Abschlag stehen. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Sprungziel des Skip-Links ist nicht interaktiv: kein Rahmen um den ganzen Inhalt */
+  [tabindex="-1"]:focus {
+    outline: none;
+  }
+}
+
+/* Bewegung reduzieren, wenn das System es wünscht (WCAG 2.3.3, 2.2.2) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

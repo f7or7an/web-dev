@@ -128,7 +128,7 @@ Vollständige Checkliste: `tests-und-qualitaet.md`. Mindestens:
 
 ## Git
 
-- Jedes Projekt ist ein eigenes privates Repo bei GitHub (`f7or7an`). Vorhanden: Gora, `vogelperspektive`, `vogelperspektive-praxisraum`. FlowTech hat ein Repo ohne Commit, Ortrud keins → nachholen.
+- Jedes Projekt ist ein eigenes privates Repo bei GitHub (`f7or7an`). Vorhanden: Gora, `vogelperspektive`, `vogelperspektive-praxisraum`. FlowTech (`main`), Ortrud und der Layer `nuxt-base` haben seit 27.11.2026 einen ersten Commit, aber noch kein Remote: Florian legt `flowtech-website`, `ortrud`, `nuxt-base` und `renovate-config` als **private** Repos an (Entscheidung 27.11.2026, kein öffentliches Repo).
 - **Meta-Repo** `f7or7an/web-dev` (Websites und Webapps, angelegt 21.11.2026; für Versionierung und Cloud-Sessions): nur `CLAUDE.md`, `SERVER.md`, `.claude/rules/`, `vorlagen/`, `_bausteine/`, `entscheidungen/` (Beschlusslisten mit Quellen). Projektordner per `.gitignore` ausgeschlossen.
 - **Conventional Commits** (`feat:`, `fix:`, `chore(deps):` …), kein commitlint nötig. Für den Layer Pflicht.
 - Nicht ins Repo: `node_modules`, `.nuxt`, `.output`, `dist`, `.data`, `*.sqlite*`, `.env*` (außer `.env.example`), Logs, Arbeitsdateien.

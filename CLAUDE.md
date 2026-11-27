@@ -1,6 +1,6 @@
 # WebSites – gemeinsame Regeln für alle Projekte
 
-Stand: 21.11.2026. Dieser **Kern** gilt für jedes Projekt unter `WebSites/` (`C:\Users\flori\Documents\FlowTech\WebSites`) und lädt in jeder Session.
+Stand: 21.11.2026, ergänzt 24. und 25.11.2026. Dieser **Kern** gilt für jedes Projekt unter `WebSites/` (`C:\Users\flori\Documents\FlowTech\WebSites`) und lädt in jeder Session.
 Detailregeln: `WebSites/.claude/rules/` (Verzeichnis unten). Server und Deployment: `WebSites/SERVER.md` (vor jeder Server-Arbeit lesen).
 Was nur ein Projekt betrifft, steht in dessen `CLAUDE.md` und `README.md`.
 
@@ -68,10 +68,10 @@ Projektdokumente (z. B. Goras `AGENTS.md` und `docs/`) gehen nur vor, soweit es 
 | Datenbank | **SQLite** über `node:sqlite` (WAL, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout`) | Datei unter `.data/`, im Container als Volume. **Drizzle ORM 0.45.x (≥ 0.45.2)** über `drizzle-orm/sqlite-proxy` + drizzle-kit, bis Drizzle 1.0 stabil ist. Schema `db/schema.ts`, Migrationen `drizzle/`, nur Struktur. Altbestand: Vogelperspektive nutzt db0 ohne Drizzle. |
 | Login | **`nuxt-auth-utils` ≥ 0.6** (Kompatibilität mit Nuxt 4.6, kein Advisory) | Secret `NUXT_APP_SECRET`. Passwörter nur als Hash, keine offene Registrierung. Rollen in der DB, jede API prüft Freigabe und Rolle erneut (Muster Gora). |
 | Mail | **nodemailer ≥ 10.1.4** über SMTP des eigenen Postfachs | Zugangsdaten nur per Env (`NUXT_SMTP_*`). |
-| Formularschutz | Kontakt-, Newsletter-, Feedback-, Buchungs-, Anmelde- und Antragsformulare: **Honeypot `website` + Rate-Limit**, Soll: signierte Mindestzeit (≥ 3 s), sobald Layer-Baustein vorliegt | **Login** ohne Honeypot und Mindestzeit (Passwortmanager mit Auto-Absenden, WCAG 3.3.8), dafür Rate-Limit pro IP und pro Konto. Client-IP hinter Caddy = **letzter** Eintrag in `X-Forwarded-For`. |
-| CSRF | Soll: Middleware prüft `Sec-Fetch-Site`/`Origin` bei allen nicht-GET an `/api/**` | Muster Praxisraum `server/middleware/origin.ts`, aber Anfragen ohne `Origin` → 403 außer begründeten Ausnahmen. |
+| Formularschutz | Kontakt-, Newsletter-, Feedback-, Buchungs-, Anmelde- und Antragsformulare: **Honeypot `website` + Rate-Limit + signierte Mindestzeit (≥ 3 s)**, Baustein `_bausteine/sicherheit/` | **Login** ohne Honeypot und Mindestzeit (Passwortmanager mit Auto-Absenden, WCAG 3.3.8), dafür Rate-Limit pro IP und pro Konto. Client-IP hinter Caddy = **letzter** Eintrag in `X-Forwarded-For`. |
+| CSRF | Middleware prüft `Origin` gegen `NUXT_PUBLIC_SITE_URL` bei allen Anfragen außer GET/HEAD/OPTIONS, an alle Pfade (Entscheidung Florian 27.11.2026) | Baustein `_bausteine/sicherheit/server/middleware/origin.ts`. Ohne bzw. mit `null`-Origin nur bei `Sec-Fetch-Site: same-origin`, sonst 403; Ausnahmen nur exakt und begründet (`server-und-sicherheit.md`). |
 | Sicherheitsheader | CSP aus der App über **`nuxt-security`** (nur `contentSecurityPolicy`), alle anderen Header in Caddy | Neue CSP zuerst Report-Only (`security.contentSecurityPolicyReportOnly: true` + `ssg: { meta: false }`, in Modus A nicht möglich). Konfiguration: `server-und-sicherheit.md`. |
-| Dark Mode | nur wenn das Design es vorsieht: **eigener Umschalter** (Composable, im Layer sobald veröffentlicht) | Liest `prefers-color-scheme`, speichert nur nach Klick in `sessionStorage`, setzt `dark` am `<html>` (Inline-Skript gegen Aufblitzen, CSP-Hash). **Kein `@nuxtjs/color-mode`**: schreibt bei jedem Aufruf in den Speicher. |
+| Dark Mode | nur wenn das Design es vorsieht: **eigener Umschalter**, Baustein `_bausteine/farbmodus/` (im Layer sobald veröffentlicht) | Liest `prefers-color-scheme`, speichert nur nach Klick in `sessionStorage`, setzt `dark` am `<html>` (Inline-Skript gegen Aufblitzen, CSP-Hash). **Kein `@nuxtjs/color-mode`**: schreibt bei jedem Aufruf in den Speicher. |
 | Lint und Tests | **ESLint 10** + `@nuxt/eslint` ≥ 1.17 (`stylistic: true`), **Vitest 5**, `@nuxt/test-utils` ≥ 4.4, Playwright | Kein Prettier, kein Biome. Tests in C Pflicht, in B für Server-Logik plus Rauchtest. Details: `tests-und-qualitaet.md`. |
 | Gemeinsamer Layer | **`@f7or7an/nuxt-base`** (privates npm-Paket über GitHub Packages) per `extends`, **sobald veröffentlicht** | Bis dahin ist `_bausteine/` die Quelle (kopieren). Details: `abhaengigkeiten-und-layer.md`. |
 
@@ -138,7 +138,7 @@ Vollständige Checkliste: `tests-und-qualitaet.md`. Mindestens:
 
 - Alles über `runtimeConfig` und `NUXT_*`-Variablen. Unter `public` nur, was der Browser sehen darf.
 - `.env` nie committen und nie ins Image (`.dockerignore`). `.env.example` vollständig und kommentiert, Geheimnisse ohne Wert.
-- Login-Secret ab nuxt-auth-utils 0.6: `NUXT_APP_SECRET` (≥ 32 Zeichen). `NUXT_SESSION_PASSWORD` erst **beim** Update auf 0.6 entfernen, im selben Schritt `NUXT_APP_SECRET` setzen, außerhalb der Hauptzeit (meldet alle ab). Nie vorher entfernen.
+- `NUXT_APP_SECRET` (≥ 32 Zeichen) ist in B/C immer Pflicht: Schlüssel der Formular-Mindestzeit, mit nuxt-auth-utils ≥ 0.6 zugleich Sitzungs-Secret. Beim Update auf 0.6 nur `NUXT_SESSION_PASSWORD` entfernen, außerhalb der Hauptzeit (meldet alle ab). `NUXT_PUBLIC_SITE_URL` ist ebenfalls Pflicht (CSRF, Startprüfung), je Stack zur Laufzeit gesetzt.
 - Schlüssel erzeugen: `openssl rand -base64 32` oder `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
 - Geheimnisse nie in Chat, README, Memory, Commit-Nachrichten oder Logs. Tokens für private Pakete nur als Build-Secret, nie im Image oder in einer `.npmrc` im Repo.
 - Sensible Daten (Gesundheit, Finanzen) verschlüsselt (AES-256-GCM, `NUXT_DATA_KEY`, nie aus `NUXT_APP_SECRET` abgeleitet) und mit Löschfristen. Schlüssel getrennt sichern. Details: `server-und-sicherheit.md`.
@@ -178,5 +178,7 @@ Ohne `paths` lädt sie beim Start, mit ungültigem YAML immer. Vor Planungsarbei
 - **`shadcn-vue init`** braucht ein echtes Terminal → `components.json` und `app/lib/utils.ts` von Hand anlegen, dann `npx shadcn-vue@latest add <name>`.
 - **shadcn `from "cn"`** ist seit 10/2026 gewollt (npm-Paket `cn`). Pro Projekt einheitlich: bestehende Projekte bleiben bei `@/lib/utils`, neue folgen dem shadcn-Standard; Festlegung in der Projekt-`CLAUDE.md`. Selektoren wie `data-open:` → Reka setzt `data-state`/`data-orientation`.
 - **Windows:** `npm run generate` scheitert, wenn ein Terminal in `.output/public` steht. **Git Bash** macht aus `/` Windows-Pfade → `MSYS_NO_PATHCONV=1`.
+- **Nitro verwirft `z.config(…)`** in `shared/zod.ts` beim Server-Bündeln → Plugin `server/plugins/zod-config.ts` (Baustein `sicherheit`).
+- **Nuxt schreibt nach Deploys `nuxt:reload*` in den sessionStorage** → `emitRouteChunkError: 'manual'` + Baustein `chunk-reload`.
 - **i18n-JSON:** gerade `"` im Text beenden den String → typografische „…“ verwenden, Datei vor dem Build mit `JSON.parse` prüfen.
 - **dogado:** Nach mehreren fehlgeschlagenen SSH-Logins sperrt Fail2Ban die IP für 30–60 Minuten. Nicht wiederholt probieren, immer `ssh -o BatchMode=yes` mit Key.

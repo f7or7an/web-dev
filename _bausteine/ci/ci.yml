@@ -1,0 +1,75 @@
+# Herkunft: _bausteine/ci/ci.yml (Stand 24.11.2026), nach WebSites/.claude/rules/ci-workflow.md.
+# Modus B/C: prüfen, Image bauen, scannen, nach GHCR schieben. Ziel im Projekt: .github/workflows/ci.yml
+# Anpassen: <name> in IMAGE (= Repo-Name, klein geschrieben). Actions sind per Commit-SHA gepinnt (Renovate aktualisiert sie).
+# Gemeinsamer Layer @f7or7an/nuxt-base: erst nach Veröffentlichung die mit „Layer:“ markierten Zeilen ergänzen.
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency: { group: 'ci-${{ github.ref }}', cancel-in-progress: true }
+env:
+  npm_config_strict_allow_scripts: 'true'
+  IMAGE: ghcr.io/f7or7an/<name>:${{ github.sha }}
+  # renovate: datasource=npm depName=npm
+  NPM_VERSION: 12.2.2
+  # renovate: datasource=docker depName=aquasec/trivy
+  TRIVY_IMAGE: aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    permissions: { contents: read }   # Layer: packages: read ergänzen
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .node-version, cache: npm }
+        # Layer: in with: registry-url: 'https://npm.pkg.github.com', scope: '@f7or7an'
+      - run: npm install -g "npm@$NPM_VERSION"
+      - run: npm ci
+        # Layer: env: { NODE_AUTH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+      - run: npm audit signatures
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run lint && npm run typecheck && npm test && npm run build
+      # Fehlerlog gegen den gebauten Server (Baustein sicherheit, Skript test:build; Muster: dessen README Schritt 11).
+      # Pflicht-Variablen der eigenen Startprüfung (z. B. NUXT_DATA_KEY, SMTP) hier mit Testwerten ergänzen, nie echte.
+      # Projekte ohne test:build: Schritt weglassen, bis das Skript da ist (Punkt in STANDARDS-AUDIT.md).
+      - run: npm run test:build
+        env: { TEST_PORT: '3456' }
+      # Chunk-Reload ohne sessionStorage (Baustein chunk-reload): headless Chrome, auf ubuntu-24.04 vorhanden
+      - run: npm run test:chunk-reload
+        env: { TEST_PORT: '3456' }
+  image:
+    needs: check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with: { registry: ghcr.io, username: '${{ github.actor }}', password: '${{ secrets.GITHUB_TOKEN }}' }
+      - name: Bauen (als Tar-Datei, noch nicht hochladen)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          outputs: type=docker,dest=${{ runner.temp }}/image.tar
+          provenance: false   # Attestierung erst beim Hochladen
+          tags: ${{ env.IMAGE }}
+          # Layer: secrets: "npmrc=//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}"
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # Scan gegen die Tar-Datei, nicht gegen docker.sock (ein Scanner mit docker.sock hätte volle Kontrolle über den Runner).
+      # Bei TOOMANYREQUESTS von ghcr.io: --db-repository public.ecr.aws/aquasecurity/trivy-db ergänzen
+      - name: Image-Scan ohne high/critical (ohne docker.sock)
+        run: >
+          docker run --rm -v "$RUNNER_TEMP/image.tar:/image.tar:ro" "$TRIVY_IMAGE"
+          image --input /image.tar --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed
+      - name: Hochladen (mit Provenance)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          push: true
+          tags: ${{ env.IMAGE }}
+          # Layer: secrets: "npmrc=//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}"
+          cache-from: type=gha

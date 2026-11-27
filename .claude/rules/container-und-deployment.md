@@ -69,7 +69,7 @@ CMD ["node", ".output/server/index.mjs"]
 
 - `NPM_VERSION` steht als `ARG` mit `renovate:`-Kommentar davor, damit Renovate sie über den `customManagers`-Eintrag des gemeinsamen Presets findet; sonst veraltet sie stillschweigend. Der Name muss auf `_VERSION` enden.
 - `NODE_OPTIONS=--disable-warning=ExperimentalWarning` entfällt (`node:sqlite` ist ab Node 24.15/26 „Release candidate“).
-- Werte, die beim Build eingebacken werden (z. B. `NUXT_PUBLIC_SITE_URL` für Canonical), als `ARG` mit Standardwert, nie Geheimnisse.
+- Werte, die beim Build eingebacken werden (z. B. `NUXT_PUBLIC_SITE_URL` für Canonical vorgerenderter Seiten), als `ARG` mit Standardwert, nie Geheimnisse. `NUXT_PUBLIC_SITE_URL` zusätzlich zur Laufzeit je Stack setzen (CSRF und Startprüfung lesen sie zur Laufzeit; Staging `https://<name>.staging.flow-tech.org`, `SERVER.md`).
 - `npm_config_strict_allow_scripts` setzt die npm-Einstellung `strict-allow-scripts` per Umgebungsvariable (allgemeiner npm-Mechanismus; der Schalter war nicht Teil des Pilottests → beim ersten Build prüfen, dass ein nicht freigegebenes Skript den Build abbricht).
 - Kein Entrypoint-Skript für Migrationen oder Start (siehe unten).
 - `.dockerignore` mindestens: `node_modules`, `.nuxt`, `.output`, `.data`, `.git`, `.env`, `.env.*` mit `!.env.example`, `*.log`, `tests`. Sonst gelangen Geheimnisse und lokale Daten über `COPY . .` ins Build-Stage.

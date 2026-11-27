@@ -18,8 +18,10 @@
     outline-offset: 2px;
   }
 
-  /* Sprungziel des Skip-Links ist nicht interaktiv: kein Rahmen um den ganzen Inhalt */
-  [tabindex="-1"]:focus {
+  /* Sprungziel des Skip-Links ist nicht interaktiv: kein Rahmen um den ganzen Inhalt.
+     Bewusst nur <main>: Ein allgemeines [tabindex="-1"] nähme auch bedienbaren Elementen
+     (z. B. per Pfeiltaste fokussierten Einträgen) den sichtbaren Fokus (WCAG 2.4.7). */
+  main[tabindex="-1"]:focus {
     outline: none;
   }
 }

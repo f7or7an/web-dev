@@ -1,0 +1,33 @@
+# Herkunft: _bausteine/ci/ci-static.yml (Stand 21.11.2026), nach WebSites/.claude/rules/ci-workflow.md (Hinweis Modus A).
+# Modus A (statisch): prüfen und erzeugen, kein Image, kein automatisches Deployment
+# (Upload von Hand nach SERVER.md 2.7). Ziel im Projekt: .github/workflows/ci.yml
+# Actions sind per Commit-SHA gepinnt (Renovate aktualisiert sie).
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency: { group: 'ci-${{ github.ref }}', cancel-in-progress: true }
+env:
+  npm_config_strict_allow_scripts: 'true'
+  # renovate: datasource=npm depName=npm
+  NPM_VERSION: 12.2.2
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version-file: .node-version, cache: npm }
+      - run: npm install -g "npm@$NPM_VERSION"
+      - run: npm ci
+      - run: npm audit signatures
+      - run: npm audit --omit=dev --audit-level=high
+      # Modus A hat keine Pflicht-Tests; „npm test“ ergänzen, sobald das Projekt Tests hat.
+      - run: npm run lint && npm run typecheck && npm run generate
+      # Chunk-Reload ohne sessionStorage (Baustein chunk-reload): headless Chrome, auf ubuntu-24.04 vorhanden
+      - run: npm run test:chunk-reload
+        env: { TEST_PORT: '3456' }

@@ -14,7 +14,7 @@ paths:
 
 # Tests, Lint und Qualität
 
-Stand: 21.11.2026. Ergänzt die Kurzfassungen zu Arbeitsweise und Qualität in `WebSites/CLAUDE.md`. Verweise auf `*.md` ohne Pfad meinen `WebSites/.claude/rules/`. CI-Workflow: `ci-workflow.md`. Image-Bau: `container-und-deployment.md`. Barrierefreiheitsprüfung: `barrierefreiheit.md`. Performance-Budget: `performance.md`.
+Stand: 21.11.2026, ergänzt 25.11.2026. Ergänzt die Kurzfassungen zu Arbeitsweise und Qualität in `WebSites/CLAUDE.md`. Verweise auf `*.md` ohne Pfad meinen `WebSites/.claude/rules/`. CI-Workflow: `ci-workflow.md`. Image-Bau: `container-und-deployment.md`. Barrierefreiheitsprüfung: `barrierefreiheit.md`. Performance-Budget: `performance.md`.
 
 ## Lint und Format
 
@@ -33,8 +33,8 @@ Stand: 21.11.2026. Ergänzt die Kurzfassungen zu Arbeitsweise und Qualität in `
 
 | Modus | Pflicht |
 |---|---|
-| A statisch | keine automatischen Tests; Prüfung nach Checkliste unten |
-| B Hybrid | Vitest für `server/utils` (empfohlen für alle Server-Logik) + ein E2E-Rauchtest, der jede API-Route und jedes Formular einmal aufruft |
+| A statisch | keine Unit-Tests; Browser-Test `npm run test:chunk-reload` (`_bausteine/chunk-reload/`), sonst Prüfung nach Checkliste unten |
+| B Hybrid | Vitest für `server/utils` (empfohlen für alle Server-Logik) + ein E2E-Rauchtest, der jede API-Route und jedes Formular einmal aufruft + `npm run test:build` (Fehlerlog gegen den gebauten Server, `server-und-sicherheit.md`) + `npm run test:chunk-reload` (alle Modi) |
 | C Webapp | wie B, dazu Playwright für Login und die Hauptabläufe (z. B. Buchung, Anmeldung, Sitzungsraum) |
 
 - Vitest für Utils und Server-Routen, Playwright für die wichtigsten Abläufe (Formular absenden, Login, Buchung).
@@ -71,7 +71,7 @@ export default defineConfig({
 
 **Bauen**
 - [ ] `npm run typecheck` und `npm run build` bzw. `npm run generate` laufen ohne Fehler.
-- [ ] Tests grün (Modus B/C, siehe oben).
+- [ ] Tests grün (Modus B/C, siehe oben), dazu `npm run test:build` (B/C) und `npm run test:chunk-reload` (alle Modi). Fehlt ein Skript: Audit-Punkt.
 - [ ] `npm audit --omit=dev` ohne high/critical, `npm audit signatures` ohne Fehler (Ablauf bei Funden: `abhaengigkeiten-und-layer.md`).
 - [ ] Im CI: Image-Scan ohne high/critical (Modus B/C, `ci-workflow.md`).
 

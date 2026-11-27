@@ -9,7 +9,7 @@ paths:
 
 # Barrierefreiheit (EU-Recht und WCAG 2.2 AA)
 
-Stand: 21.11.2026. Ergänzt Grundsatz 6 in `WebSites/CLAUDE.md`. Verweise auf `*.md` ohne Pfad meinen `WebSites/.claude/rules/`. Jedes Projekt erfüllt **WCAG 2.2 Stufe AA**, egal ob das Gesetz es im Einzelfall verlangt. Barrierefreiheit wird beim Bauen berücksichtigt, nicht am Ende nachgerüstet.
+Stand: 21.11.2026, ergänzt 24.11.2026. Ergänzt Grundsatz 6 in `WebSites/CLAUDE.md`. Verweise auf `*.md` ohne Pfad meinen `WebSites/.claude/rules/`. Jedes Projekt erfüllt **WCAG 2.2 Stufe AA**, egal ob das Gesetz es im Einzelfall verlangt. Barrierefreiheit wird beim Bauen berücksichtigt, nicht am Ende nachgerüstet.
 
 ## Rechtsrahmen
 
@@ -87,7 +87,7 @@ Die Seite selbst muss barrierefrei sein. Projekte außerhalb des Anwendungsberei
 - Fehlermeldungen als Text direkt am Feld, verknüpft per `aria-describedby`, Feld mit `aria-invalid`. Nach dem Absenden zum ersten Fehler springen (Muster: Rabatt-Fragebogen Vogelperspektive).
 - `autocomplete`-Attribute für persönliche Daten (`name`, `email`, `tel`, `street-address` …).
 - Bereits eingegebene Daten im selben Ablauf nicht erneut abfragen.
-- Login ohne Denkaufgaben (WCAG 3.3.8): Einfügen erlaubt, Passwortmanager funktionieren, auch mit Auto-Absenden, kein CAPTCHA mit Rätsel. Deshalb hat das Login weder Honeypot noch Mindestzeit, sondern schützt sich per Rate-Limit pro IP und pro Konto. Honeypot und Mindestzeit (≥ 3 s; Soll, sobald der Layer-Baustein vorliegt) gelten nur für Kontakt-, Newsletter-, Feedback-, Buchungs-, Anmelde-/Registrierungs- und Antragsformulare und ersetzen dort das CAPTCHA (Technik: `server-und-sicherheit.md`, Formularschutz).
+- Login ohne Denkaufgaben (WCAG 3.3.8): Einfügen erlaubt, Passwortmanager funktionieren, auch mit Auto-Absenden, kein CAPTCHA mit Rätsel. Deshalb hat das Login weder Honeypot noch Mindestzeit, sondern schützt sich per Rate-Limit pro IP und pro Konto. Honeypot und Mindestzeit (≥ 3 s, Baustein `_bausteine/sicherheit/`) gelten nur für Kontakt-, Newsletter-, Feedback-, Buchungs-, Anmelde-/Registrierungs- und Antragsformulare und ersetzen dort das CAPTCHA (Technik: `server-und-sicherheit.md`, Formularschutz).
 - Hilfe und Kontakt stehen auf jeder Seite an derselben Stelle (Footer).
 - Klare, einfache Sprache. Bei Angeboten für breite Zielgruppen eine Seite in Leichter Sprache erwägen.
 

@@ -26,7 +26,7 @@ paths:
 
 # Formulare, Datenschutz und Rechtsseiten
 
-Stand: 21.11.2026. Keine Rechtsberatung: Grenzfälle an Florian geben, nicht selbst entscheiden.
+Stand: 21.11.2026, ergänzt 24. und 25.11.2026. Keine Rechtsberatung: Grenzfälle an Florian geben, nicht selbst entscheiden.
 Nicht hier: Barrierefreiheit von Formularen (Labels, Fehlermeldungen, `autocomplete`, Fokus: `barrierefreiheit.md`), Server-Technik für Rate-Limit, Honeypot, Login, Verschlüsselung und Löschfristen (`server-und-sicherheit.md`), Seite `/barrierefreiheit` (`barrierefreiheit.md`), Zugriffslog-Einstellungen (`SERVER.md`).
 „Layer“ meint `@f7or7an/nuxt-base`, sobald veröffentlicht; bis dahin die genannte Projektvorlage bzw. `_bausteine/`. Begründete Abweichungen eines Projekts stehen in der Tabelle „Abweichungen“ seiner `CLAUDE.md` (Regel, Abweichung, Grund, von Florian bestätigt am).
 
@@ -41,7 +41,7 @@ Nicht hier: Barrierefreiheit von Formularen (Labels, Fehlermeldungen, `autocompl
 
 **Kontakt-, Newsletter-, Feedback-, Buchungs-, Anmelde-/Registrierungs- und Antragsformulare** haben alle drei Schutzschichten (Technik und Vorlage: `server-und-sicherheit.md`, Abschnitt Formularschutz):
 1. **Honeypot-Feld `website`:** für Menschen unsichtbar, für Bots ein normales Feld. Ist es gefüllt, meldet der Server Erfolg und verwirft die Daten still. Markup wie in Vogelperspektive `app/components/ContactForm.vue`: `<input v-model="form.website" type="text" name="website" class="hidden" tabindex="-1" autocomplete="off" aria-hidden="true">`.
-2. **Signierte Mindestzeit (Soll, sobald der Layer-Baustein vorliegt):** Token beim Laden des Formulars, Absenden frühestens nach 3 s und vor Ablauf des Tokens. Läuft das Token ab, bekommt die Person eine verständliche Meldung und kann ohne Datenverlust erneut senden.
+2. **Signierte Mindestzeit (Baustein `_bausteine/sicherheit/`, `useFormToken`):** Token beim Laden des Formulars, Absenden frühestens nach 3 s und vor Ablauf des Tokens. Läuft das Token ab, bekommt die Person eine verständliche Meldung und kann ohne Datenverlust erneut senden.
 3. **Rate-Limit** pro IP und Zweck.
 
 - **Login ist ausgenommen** von Honeypot und Mindestzeit: Passwortmanager füllen und senden automatisch ab (WCAG 3.3.8). Der Login schützt sich per Rate-Limit pro IP und pro Konto (`server-und-sicherheit.md`).
@@ -80,12 +80,13 @@ Entscheidung vom 21.11.2026: **Kein Tracking, keine Cookies und kein Web-Storage
 - **Sprache nur über die URL** (i18n `strategy: 'prefix_except_default'`, `detectBrowserLanguage: false`, dadurch kein `i18n_redirected`-Cookie).
 - Keine IDs (außer wie oben in Apps), keine Zeitstempel, kein Fingerprinting, kein Zugriff Dritter.
 - Alles andere (z. B. Formular-Entwürfe, „Hinweis gesehen“) nicht im Browser speichern. Wenn es wirklich nötig scheint: Florian fragen.
+- **Chunk-Reload ohne Speicher (Pflicht in allen Projekten, auch Modus A):** Nuxt schreibt bei Chunk-Ladefehlern nach einem Deploy `nuxt:reload` und `nuxt:reload:state` (den ganzen Payload-State) in den `sessionStorage`. Deshalb `experimental.emitRouteChunkError: 'manual'` und das Plugin aus `_bausteine/chunk-reload/` (im Layer enthalten), geprüft mit dessen Browser-Test `test:chunk-reload`. Für Bots schreibt Nuxt während der Hydration weiter `nuxt:reload` (nur Pfad und Ablaufzeit); das ist hingenommen und wird nicht in der DSE genannt (Entscheidung Florian 27.11.2026). Ob auch das abgestellt werden soll, steht in der README des Bausteins.
 
 Quellen: DSK-Orientierungshilfe Digitale Dienste v1.2 Rn. 21, 74/76, 79–81, 95; WP194 Abschn. 3.6; EDPB Guidelines 2/2023 Rn. 43–44. Rechtsgrundlage: § 25 Abs. 2 Nr. 2 TDDDG (Bulgarien: чл. 4а Abs. 4 Nr. 2 ЗЕТ).
 
 ### Farbmodus: eigener Umschalter statt `@nuxtjs/color-mode`
 
-`@nuxtjs/color-mode` (4.1.0) schreibt bei jedem Seitenaufruf `nuxt-color-mode=system` in den Speicher (`plugin.client.js`, `setPreferenceToStorage` in `onIdleAfterHydration`), auch ohne Wahl. Das widerspricht Grundsatz 3. Deshalb: Modul entfernen (`npm uninstall @nuxtjs/color-mode`, Eintrag in `modules` und `colorMode` in der `nuxt.config.ts` löschen; heute FlowTech) und einen kleinen eigenen Umschalter nutzen (Composable `useColorScheme()` im Layer). Nur in Projekten, deren Design einen Dunkelmodus vorsieht.
+`@nuxtjs/color-mode` (4.1.0) schreibt bei jedem Seitenaufruf `nuxt-color-mode=system` in den Speicher (`plugin.client.js`, `setPreferenceToStorage` in `onIdleAfterHydration`), auch ohne Wahl. Das widerspricht Grundsatz 3. Deshalb: Modul entfernen (`npm uninstall @nuxtjs/color-mode`, Eintrag in `modules` und `colorMode` in der `nuxt.config.ts` löschen; heute FlowTech) und den eigenen Umschalter aus `_bausteine/farbmodus/` nutzen (Composable `useColorScheme()`, `SiteColorSchemeToggle`; im Layer, sobald veröffentlicht). Nur in Projekten, deren Design einen Dunkelmodus vorsieht.
 
 Verhalten:
 1. **Drei Zustände:** `system` (Standard, nichts gespeichert), `light`, `dark`. Dunkel heißt: Klasse `dark` am `<html>` (passt zu Tailwind und shadcn-vue).
@@ -123,8 +124,9 @@ Staging enthält nie echte Personendaten, nur anonymisierte (`SERVER.md`).
 
 - Impressum, Datenschutzerklärung und (im Anwendungsbereich des BFSG) `/barrierefreiheit` sind vor jedem Livegang vollständig. Im Footer jeder Seite verlinkt.
 - **Fehlende Inhalte nie erfinden** (keine ausgedachten Adressen, Registernummern, Preise), sondern sichtbar als Platzhalter markieren.
-- **Muster `PlaceholderNote`** (`Ortrud/app/components/PlaceholderNote.vue`; kommt in den Layer, sobald veröffentlicht):
+- **Muster `PlaceholderNote`** (`Ortrud/app/components/site/PlaceholderNote.vue`; kommt in den Layer, sobald veröffentlicht):
   - `<aside role="note">` mit gestricheltem Rahmen, Icon mit `aria-hidden="true"`, Titel (Standard „Inhalt fehlt noch“) und Slot für die Erklärung, was fehlt.
   - Sichtbar nur, wenn `runtimeConfig.public.showPlaceholders` wahr ist (`NUXT_PUBLIC_SHOW_PLACEHOLDERS`). Schalter in der `nuxt.config.ts`, Muster `Ortrud/nuxt.config.ts`.
   - Vorgerenderte Seiten lesen den Wert **beim Build**: Für den Livegang `NUXT_PUBLIC_SHOW_PLACEHOLDERS=false` beim Build setzen, nicht erst im Container.
-- **Vor dem Livegang:** Schalter aus, dann alle Vorkommen von `PlaceholderNote` im Code suchen und klären, ob der Inhalt fehlt. Eine Startprüfung kann warnen, wenn in Produktion Platzhalter an sind (Muster Praxisraum `startup-check.ts`).
+- Platzhalter immer als `PlaceholderNote`, nie als Text in eckigen Klammern im Fließtext: Den blendet der Schalter nicht aus und die Suche findet ihn nicht.
+- **Vor dem Livegang:** Schalter aus, dann alle Vorkommen von `PlaceholderNote` suchen, dazu in i18n-JSON und `app/data/` nach `\[[^\]]*(fehlt|TODO|einfügen|Platzhalter)`, und klären, ob der Inhalt fehlt. Eine Startprüfung kann warnen, wenn in Produktion Platzhalter an sind (Muster Praxisraum `startup-check.ts`).

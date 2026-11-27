@@ -1,6 +1,6 @@
 # Server: Ist-Zustand, Soll-Zustand und Umzug
 
-Stand: 21.11.2026. Gilt zusammen mit [CLAUDE.md](CLAUDE.md). Die Dateien im Projekt-Repo stehen als Vorlagen in `WebSites/.claude/rules/container-und-deployment.md` (Dockerfile, `compose.yml`, Healthcheck, Migrationen beim Start, Caddy-Datei pro Projekt) und `WebSites/.claude/rules/ci-workflow.md` (GitHub Actions). Diese Datei beschreibt die Serverseite.
+Stand: 21.11.2026, ergänzt 24.11.2026. Gilt zusammen mit [CLAUDE.md](CLAUDE.md). Die Dateien im Projekt-Repo stehen als Vorlagen in `WebSites/.claude/rules/container-und-deployment.md` (Dockerfile, `compose.yml`, Healthcheck, Migrationen beim Start, Caddy-Datei pro Projekt) und `WebSites/.claude/rules/ci-workflow.md` (GitHub Actions). Diese Datei beschreibt die Serverseite.
 Quellen: die Projektordner, frühere Claude-Sessions vom 06.11.2026 (dogado-Zugang, FlowTech-Deployment, Vogelperspektive-Neubau, OS-Update des Linux-Servers), Betriebsprüfungen Praxisraum vom 20./21.11.2026, Recherche „Betrieb“, Pilottest und Prüfrunde 1 vom 21.11.2026, LiveKit-Doku (docs.livekit.io, Self-hosting: Ports and firewall, Deployment, Benchmark; abgerufen 21.11.2026).
 
 ## 1. Ist-Zustand
@@ -200,10 +200,11 @@ Auf dem Praxisraum-Server gleich, aber `10.90.0.2:8080:8080`, ohne `/srv/static`
 		Strict-Transport-Security "max-age=63072000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
-		Referrer-Policy "strict-origin-when-cross-origin"
+		?Referrer-Policy "strict-origin-when-cross-origin"   # ? = nur wenn die App keine eigene setzt (z. B. no-referrer auf Token-Seiten)
 		Cross-Origin-Opener-Policy "same-origin"
 		Cross-Origin-Resource-Policy "same-site"
 		-Server
+		-X-Powered-By   # setzt Nitro/Nuxt („Nuxt“); nuxt-security bleibt dafür aus
 	}
 }
 
@@ -262,6 +263,7 @@ Auf dem Praxisraum-Server gleich, aber `10.90.0.2:8080:8080`, ohne `/srv/static`
 	header @html Cache-Control "no-cache"
 	file_server {
 		precompressed br zstd gzip   # .br/.gz aus nitro.compressPublicAssets
+		hide .htaccess*              # Nitro kopiert .htaccess (dogado) mit .br/.gz in die Ausgabe
 	}
 	handle_errors {
 		rewrite * /404.html
@@ -299,7 +301,7 @@ import /etc/caddy/sites/*.caddy
 ```
 
 Hinweise zum Caddyfile:
-- **Header-Reihenfolge:** Wegen `-Server` wendet Caddy den Header-Block erst beim Schreiben der Antwort an und überschreibt dabei gleichnamige Header der App. Deshalb setzt die App (nuxt-security) nur die CSP, alle anderen Header kommen von hier, jeder aus genau einer Quelle. Nach dem ersten Deployment mit `curl -sI https://<domain>/` prüfen: jeder Header genau einmal.
+- **Header-Reihenfolge:** Wegen `-Server` wendet Caddy den Header-Block erst beim Schreiben der Antwort an und überschreibt dabei gleichnamige Header der App. Deshalb setzt die App (nuxt-security) nur die CSP, alle anderen Header kommen von hier, jeder aus genau einer Quelle. Einzige Ausnahme: `Referrer-Policy` steht mit `?` und gilt nur als Vorgabe, weil Seiten mit persönlichem Token im Link (Newsletter, Einladungen, Praxisraum) per `routeRules` `no-referrer` setzen müssen (`formulare-und-datenschutz.md`); ohne `?` würde Caddy das überschreiben. Nach dem ersten Deployment mit `curl -sI https://<domain>/` prüfen: jeder Header genau einmal.
 - **Kein Snippet-Mischen:** Eine Site importiert genau eins von `app`, `app-media`, `static` oder schreibt den Block aus. Nie `security` und `security-media` zusammen (zwei `Permissions-Policy`).
 - **HSTS mit `includeSubDomains`** nur, wenn alle Subdomains der Domain HTTPS können (auch Mail-Webinterfaces). Sonst eigener `header`-Block ohne `includeSubDomains` statt Snippet (heute Gora: DNS-Zone bei Wix, nicht von uns verwaltet; vor dem Livegang prüfen, ob `includeSubDomains` möglich ist).
 - **`Cross-Origin-Resource-Policy: same-site`** sperrt das Einbinden eigener Bilder auf fremden Seiten. Bilder in Newsletter-Mails, die Webmailer direkt laden, brauchen vermutlich einen eigenen Pfad mit `cross-origin` (Einschätzung, beim ersten Newsletter prüfen).
@@ -386,7 +388,7 @@ Bis zum Umzug bleibt der heutige dogado-Weg: `tar` über SSH auf `web250.dogado.
 5. Prüfen: `docker compose ps` (healthy), `curl -fsS https://<domain>/api/health`, die wichtigsten Seiten, `curl -sI` auf die Header (2.5).
 6. **Rückweg:** `TAG` auf den vorigen SHA setzen und erneut deployen. Ändert eine Migration Daten so, dass der alte Stand nicht mehr darauf läuft, steht das bei der Migration; dann zusätzlich den Snapshot aus Schritt 3 zurückspielen. Das frühere Taggen als `:prev` entfällt.
 
-**Staging:** dasselbe Image als zweiter Stack mit `STACK=<name>-staging` (Container `<name>-staging`, Netz `<name>-staging-proxy`, Daten unter `/srv/apps/<name>-staging/data`), erreichbar unter `<name>.staging.flow-tech.org` mit Passwort. **Keine echten Personendaten** im Staging, nur erfundene oder anonymisierte (bei Gesundheitsdaten Art. 9 DSGVO).
+**Staging:** dasselbe Image als zweiter Stack mit `STACK=<name>-staging` (Container `<name>-staging`, Netz `<name>-staging-proxy`, Daten unter `/srv/apps/<name>-staging/data`), erreichbar unter `<name>.staging.flow-tech.org` mit Passwort. `NUXT_PUBLIC_SITE_URL` im Staging-Stack zur Laufzeit auf `https://<name>.staging.flow-tech.org` setzen: CSRF-Prüfung und Startprüfung vergleichen zur Laufzeit damit, die beim Build eingebackene Produktions-URL würde jeden POST mit 403 ablehnen. **Keine echten Personendaten** im Staging, nur erfundene oder anonymisierte (bei Gesundheitsdaten Art. 9 DSGVO).
 
 **Neues Projekt auf dem Webserver (Checkliste):**
 1. `docker network create <name>-proxy`, `docker network connect <name>-proxy caddy`, Netz in `/srv/proxy/compose.yml` und in 2.4 eintragen.
@@ -446,7 +448,7 @@ Bis zum Umzug bleibt der heutige dogado-Weg: `tar` über SSH auf `web250.dogado.
 - **Getrennt im Passwortmanager sichern** (nie neben den Backups):
   - restic-Passwort und Zugang zum Backup-Ziel, je Server
   - `NUXT_DATA_KEY` je App (ohne ihn sind verschlüsselte Daten und Sicherungen wertlos; nach einem Schlüsselwechsel den alten behalten, solange ältere Sicherungen existieren)
-  - Sitzungs-Secret je App: heute `NUXT_SESSION_PASSWORD`. Erst beim Update auf nuxt-auth-utils ≥ 0.6 im selben Schritt durch `NUXT_APP_SECRET` (≥ 32 Zeichen) ersetzen, außerhalb der Hauptzeit, weil das alle abmeldet. Nie vorher entfernen.
+  - `NUXT_APP_SECRET` je B/C-App (≥ 32 Zeichen): Schlüssel für die Formular-Mindestzeit, deshalb auch ohne Login Pflicht (z. B. Ortrud); mit nuxt-auth-utils ≥ 0.6 zugleich Sitzungs-Secret. Wechsel meldet alle ab, also außerhalb der Hauptzeit. `NUXT_SESSION_PASSWORD` gibt es nach dem Update auf 0.6 nicht mehr (Stand 24.11.2026: alle Projekte umgestellt).
   - SMTP-Zugänge (`NUXT_SMTP_*`)
   - GHCR-Pull-Token je Server, Layer-Token (lokal), Push-URLs von Uptime Kuma
   - WireGuard-Schlüssel beider Server (2.15)

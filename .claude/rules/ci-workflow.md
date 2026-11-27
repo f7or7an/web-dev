@@ -5,7 +5,7 @@ paths:
 
 # CI-Workflow (GitHub Actions)
 
-Stand 21.11.2026. Vorlage `.github/workflows/ci.yml` für Modus B und C: prüfen, Image bauen, scannen, nach GHCR schieben. Dockerfile und `compose.yml`: `WebSites/.claude/rules/container-und-deployment.md`. Weitere Prüf-Jobs (E2E, Playwright, Integration) und was vor einem Deployment zu prüfen ist: `WebSites/.claude/rules/tests-und-qualitaet.md`. Deploy auf dem Server: `WebSites/SERVER.md` 2.7.
+Stand 21.11.2026, ergänzt 25.11.2026. Vorlage `.github/workflows/ci.yml` für Modus B und C: prüfen, Image bauen, scannen, nach GHCR schieben. Dockerfile und `compose.yml`: `WebSites/.claude/rules/container-und-deployment.md`. Weitere Prüf-Jobs (E2E, Playwright, Integration) und was vor einem Deployment zu prüfen ist: `WebSites/.claude/rules/tests-und-qualitaet.md`. Deploy auf dem Server: `WebSites/SERVER.md` 2.7.
 
 ## Regeln
 
@@ -15,6 +15,8 @@ Stand 21.11.2026. Vorlage `.github/workflows/ci.yml` für Modus B und C: prüfen
 - Keine langlebigen Geheimnisse: `GITHUB_TOKEN` reicht für GHCR und (sobald veröffentlicht) das Layer-Paket.
 - Nicht freigegebene Installationsskripte sind ein Fehler (`npm_config_strict_allow_scripts`).
 - Der Image-Scan läuft gegen eine Tar-Datei, nicht gegen `docker.sock`: Ein Scanner mit `docker.sock` hätte volle Kontrolle über den Runner.
+- **B/C: Schritt `npm run test:build` nach dem Build (Pflicht)**: Fehlerlog-Baustein gegen den gebauten Server (`server-und-sicherheit.md`, Logging). Verlangt die Startprüfung des Projekts weitere Variablen, stehen Testwerte unter `env:`, nie echte Geheimnisse. Fehlt das Skript noch: Schritt weglassen und Audit-Punkt.
+- **Alle Modi: Schritt `npm run test:chunk-reload` nach Build bzw. `generate` (Pflicht)**, Baustein `_bausteine/chunk-reload/` (Vorlagen `_bausteine/ci/ci.yml`, `ci-static.yml`). Fehlt das Skript noch: Schritt weglassen und Audit-Punkt.
 
 ## Vorlage
 
@@ -48,6 +50,8 @@ jobs:
       - run: npm audit signatures
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint && npm run typecheck && npm test && npm run build
+      - run: npm run test:build
+        env: { TEST_PORT: '3456' }
   image:
     needs: check
     if: github.event_name != 'pull_request'
@@ -100,4 +104,4 @@ jobs:
     ]
   }
   ```
-- **Modus A** (statisch) baut kein Image: `npm run generate` und Upload nach `SERVER.md` 2.7. Ein eigener schlanker Workflow (lint, typecheck, generate) ist möglich, deployt aber nicht automatisch.
+- **Modus A** (statisch) baut kein Image: `npm run generate` und Upload nach `SERVER.md` 2.7. Ein eigener schlanker Workflow (lint, typecheck, generate, `test:chunk-reload`; Vorlage `_bausteine/ci/ci-static.yml`) ist möglich, deployt aber nicht automatisch.

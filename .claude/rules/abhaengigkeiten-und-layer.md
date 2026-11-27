@@ -149,7 +149,7 @@ Im Projekt (`renovate.json`): `{ "extends": ["github>f7or7an/renovate-config"] }
 
 - **Repo und Paket:** privates Repo (Vorschlag `f7or7an/nuxt-base`), veröffentlicht als privates npm-Paket `@f7or7an/nuxt-base` über GitHub Packages. Nicht als Git-Abhängigkeit, weil npm 12 Git sperrt und die Nuxt-Doku npm-Pakete empfiehlt (nuxt.com/docs/4.x/guide/going-further/layers).
 - **Einbinden:** `extends: ['@f7or7an/nuxt-base']` in der `nuxt.config.ts`. In `package.json` mit **fester Version** ohne `^` (z. B. `"@f7or7an/nuxt-base": "1.2.0"`). Updates kommen per Renovate.
-- **Stand:** Der Layer existiert noch nicht. Alles hier gilt, sobald er veröffentlicht ist; bis dahin `_bausteine/` bzw. die genannten Projektvorlagen.
+- **Stand (24.11.2026):** Das Gerüst liegt lokal in `WebSites/nuxt-base/` (eigenes Git-Repo, geprüft, nicht veröffentlicht). Veröffentlichen erst, wenn Florian Repo `f7or7an/nuxt-base` und Token-Verfahren angelegt hat (README dort). Bis dahin ist `_bausteine/` die Quelle (kopieren).
 - **Startumfang:** `SiteSkipLink`, `a11y.css`, `PlaceholderNote`, `ContactForm`-Grundlage mit Honeypot und Mindestzeit, `server/utils/security.ts` (Rate-Limit, Honeypot, Client-IP), CSRF-Middleware, Muster für die Health-Route, ESLint-Basis, ggf. Renovate- und tsconfig-Vorgaben.
 - **Nur was in ≥ 2 Projekten gleich gebraucht wird.** Projektspezifisches bleibt im Projekt.
 

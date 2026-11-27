@@ -1,0 +1,53 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Gemeinsames Renovate-Preset für alle Website-Projekte (WebSites/.claude/rules/abhaengigkeiten-und-layer.md)",
+  "extends": ["config:best-practices"],
+  "minimumReleaseAge": "14 days",
+  "osvVulnerabilityAlerts": true,
+  "packageRules": [
+    {
+      "description": "npm: 14 Tage Wartezeit (schlägt die 3 Tage aus security:minimumReleaseAgeNpm)",
+      "matchDatasources": ["npm"],
+      "minimumReleaseAge": "14 days"
+    },
+    {
+      "description": "Docker-Digests: 3 Tage (abgestimmt mit container-und-deployment.md)",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["digest"],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Minor und Patch in einem PR",
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Minor- und Patch-Updates"
+    },
+    {
+      "description": "TypeScript 7 bricht vue-tsc (ERR_PACKAGE_PATH_NOT_EXPORTED)",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7"
+    },
+    {
+      "description": "Eigener Layer ohne Wartezeit (steht nach der npm-Regel)",
+      "matchPackageNames": ["@f7or7an/*"],
+      "minimumReleaseAge": null
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Versionen in Dockerfile und Workflows mit Kommentar '# renovate: datasource=… depName=…' in der Zeile davor (ARG NPM_VERSION=12.2.2 bzw. NPM_VERSION: 12.2.2)",
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/", "/(^|/)\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>\\S+)\\s+(?:(?:ARG|ENV) )?[A-Z_]*VERSION(?:=|: )(?<currentValue>[^\\s\"']+)"
+      ]
+    },
+    {
+      "description": "Images mit Digest in Workflow-Variablen (TRIVY_IMAGE: aquasec/trivy:<version>@sha256:<digest>)",
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+\\w+: \\S+?:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
+      ]
+    }
+  ]
+}

@@ -14,24 +14,26 @@ paths:
 
 # Server und Sicherheit
 
-Stand: 21.11.2026. Gilt für Modus B und C (Nitro-Server). Bezugsrahmen ist die **OWASP Top 10:2025** (neu dort: A03 Software Supply Chain Failures, A10 Mishandling of Exceptional Conditions).
+Stand: 21.11.2026, ergänzt 24. und 25.11.2026. Gilt für Modus B und C (Nitro-Server). Bezugsrahmen ist die **OWASP Top 10:2025** (neu dort: A03 Software Supply Chain Failures, A10 Mishandling of Exceptional Conditions).
 Nicht hier: Pakete und Lieferkette (`abhaengigkeiten-und-layer.md`), Formular-Regeln, Browser-Speicher und Datenschutzerklärung (`formulare-und-datenschutz.md`), Dockerfile/Compose/Caddy pro Projekt (`container-und-deployment.md`), Server-Betrieb (`SERVER.md`), Geheimnisse allgemein (Kern `CLAUDE.md`).
 „Layer“ meint `@f7or7an/nuxt-base`, sobald veröffentlicht; bis dahin die genannte Projektvorlage bzw. `_bausteine/`.
 
 ## Server-Code allgemein
 
 - **`nuxt/server` (geprüft am Code von Nuxt 4.6.4):** Wer Helfer aus `nuxt/server` nutzt (`readValidatedBody`, `getValidatedQuery`, `useSession`, `handleCors` …), definiert den Handler mit `defineEventHandler` **aus `nuxt/server`**. Sonst bekommt der Helfer ein h3-Event, und es kommt Fehler `NUXT_E8012`. Grund für die Regel: Nuxt 5 stellt darauf um.
-  - Im Handler aus `nuxt/server` ist das Event ein `RequestEvent` (nur `req`, `url`, `res`, `context`). Dort erlaubt: Nitro-Bordmittel ohne Event (`defineNitroPlugin`, `useStorage`), eigene `server/utils` per Auto-Import, sofern sie `RequestEvent` annehmen, und Modul-Helfer, die `RequestEvent` annehmen (`nuxt-auth-utils` 0.6). Heutige Utils mit `H3Event`-Parameter (z. B. `readForm`, `rateLimit` aus dem Vogelperspektive-Muster) nur im h3-Handler verwenden, bis sie umgestellt sind.
+  - Im Handler aus `nuxt/server` ist das Event ein `RequestEvent` (nur `req`, `url`, `res`, `context`). Dort erlaubt: Nitro-Bordmittel ohne Event (`defineNitroPlugin`, `useStorage`), eigene `server/utils` per Auto-Import, sofern sie `RequestEvent` annehmen, und Modul-Helfer, die `RequestEvent` annehmen (`nuxt-auth-utils` 0.6). Die Baustein-Fassung von `readForm` und `rateLimit` (`_bausteine/sicherheit/`) nimmt `RequestEvent`, gehört also in Handler mit `defineEventHandler` aus `nuxt/server`. Ältere Projekt-Utils mit `H3Event`-Parameter nur im h3-Handler verwenden, bis sie umgestellt sind.
   - h3-Helfer mit `H3Event` (`setResponseHeader`, `readMultipartFormData`, `sendStream` …) nur in Handlern mit dem auto-importierten h3-`defineEventHandler`, nie zusammen mit `nuxt/server`-Helfern. Auf Nuxt 4 läuft das zwar, aber der Typecheck meldet Fehler (README nuxt-auth-utils).
   - Ersatz im `nuxt/server`-Handler: Header über `event.res.headers.set()`, Formulardaten über `event.req.formData()`, Streams als `ReadableStream` zurückgeben.
   - `defineCachedEventHandler` umschließt einen h3-Handler: darin keine `nuxt/server`-Helfer.
 - **Nuxt 5 vorbereiten:** Nuxt 5 ist noch nicht erschienen (Roadmap „Q4 2026 estimated“). Vor jedem Minor-Update einmal in einem Branch mit `future: { compatibilityVersion: 5 }` bauen und die Warnungen in der `STANDARDS-AUDIT.md` notieren.
 - **Fehler:** `throw createError({ status, statusText, message })` statt `statusCode` (Nuxt 4.6 / Nuxt 5). `statusText` kurz auf Englisch in ASCII (h3 bereinigt es), die verständliche deutsche Meldung steht in `message`. DB- und Upstream-Fehler im Server abfangen und nie roh weitergeben (GHSA-96x6-fvhx-49hg: SSR-Fehlerdetails gingen an den Client).
-- **Validierung:** `readValidatedBody(event, schema)` bzw. `getValidatedQuery(event, schema)` mit dem zod-Schema direkt, aber nur in der Fassung aus `nuxt/server` (h3 1.15 erwartet stattdessen eine Funktion `(b) => schema.parse(b)`). Ungültige Eingaben ergeben 400. Öffentliche Formulare nutzen `readForm` (Honeypot zuerst, siehe unten). Zod-Fehlertexte lokalisieren: `z.config(z.locales.de())` (bzw. Projektsprache), im Server und im Client.
+- **Validierung:** `readValidatedBody(event, schema)` bzw. `getValidatedQuery(event, schema)` mit dem zod-Schema direkt, aber nur in der Fassung aus `nuxt/server` (h3 1.15 erwartet stattdessen eine Funktion `(b) => schema.parse(b)`). Ungültige Eingaben ergeben 400. Öffentliche Formulare nutzen `readForm` (Honeypot zuerst, siehe unten). Zod-Fehlertexte lokalisieren: `z.config(z.locales.de())` (bzw. Projektsprache), im Server und im Client, in `shared/zod.ts` zusammen mit `jitless` (CSP, siehe unten). `z` nur von dort importieren; die ESLint-Regel `no-restricted-imports` aus der README von `_bausteine/sicherheit/` erzwingt das. **Im Server zusätzlich das Plugin `server/plugins/zod-config.ts` (Pflicht):** Nitro verwirft beim Bündeln eine Datei, die `z` nur durchreicht, samt ihrem `z.config(…)`-Aufruf. Ohne das Plugin antwortet der gebaute Server englisch und ohne `jitless` (Fund Vogelperspektive, 24.11.2026). Prüfen im gebauten Server: Ein `.max()`-Verstoß ergibt den deutschen Text.
 - **Grenzen in jedem Schema:** Jeder String und jedes Array bekommt `.max()`. Grund: Sonst füllt eine einzige Anfrage Speicher und Datenbank. Die Body-Größe begrenzt zusätzlich Caddy (`request_body { max_size 1MB }`, Uploads pro Route mehr).
 - **Schemas** liegen in `shared/utils/schemas.ts` (automatisch importiert) oder werden per `#shared/…` importiert. Dieselben Schemas im Browser und auf dem Server.
 - **Keine zustandsändernden GET-Routen.** Alles, was schreibt, löscht oder Mails verschickt, ist POST/PUT/PATCH/DELETE.
 - **Logging:** keine Formularinhalte, E-Mail-Adressen, Tokens oder vollen IPs in App-Logs. Ausgabe als JSON auf stdout (Docker sammelt es). Grund: Logs sind Personendaten mit eigener Frist.
+- **Fehlerlog (Pflicht in B/C):** Baustein `request-error-log` aus `_bausteine/sicherheit/` (Nitro-Hook `error`, im Layer enthalten). Grund: Nitros Standard schreibt bei Serverfehlern die volle URL (Tokens im Pfad, E-Mail in der Query) und den Stacktrace als Text (Fund Vogelperspektive, 24.11.2026). Der Baustein schreibt eine JSON-Zeile ohne URL mit Token: das Routenmuster, bei Catch-all den Pfad ohne Query mit maskierten Parametern. Den Stack schreibt er nur als Frames ohne die Meldung (höchstens 10), die Meldung nur im Dev-Modus. Die Antwort bleibt unverändert. Abgesichert durch den Build-Test `npm run test:build` (Vergleichsbuild ohne Baustein, auch im CI, `ci-workflow.md`). Übernahme: README des Bausteins, Schritt 11.
+- **Tokens in URLs** (Bestätigungs-, Abmelde-, Termin-, Einladungslinks): mindestens 16 Zufallsbytes (`crypto.getRandomValues` bzw. `randomBytes`), als base64url (22 Zeichen) oder hex (32 Zeichen). Grund: nicht erratbar, und der Fehlerlog maskiert solche Segmente auch ohne Routenmuster. Wörter aus Kleinbuchstaben bis 20 Zeichen ließe er stehen.
 - **Sourcemaps und Devtools:** Nuxt-Standard lassen (Server-Sourcemaps an, Client-Sourcemaps aus). `devtools` bleibt aus.
 - **Dev-Server nie im Netz:** nie mit `--host` oder `0.0.0.0` starten. Grund: 2026 gab es mehrere Lücken, über die Dritte im selben Netz Dateien lesen konnten (u. a. vite GHSA-p4f5-76q4-ffq7). Für eigene Tests ein eigener Port, z. B. 3456. `HOST=0.0.0.0` im Container ist etwas anderes (Produktions-Server hinter Caddy).
 - **Absolute URLs** (Mails, Links, Weiterleitungen, Canonical) immer aus `runtimeConfig.public.siteUrl` bilden, nie aus der Anfrage. Grund: Seit Nuxt 4.6.4 vertrauen `getRequestURL`/`getRequestProtocol` aus `nuxt/server` und der Nuxt-Renderer `x-forwarded-proto`/`-host` nicht von selbst, das auto-importierte h3-`getRequestURL` (h3 1.15) dagegen übernimmt `x-forwarded-proto: https` standardmäßig (`x-forwarded-host` nur mit Option). Das Ergebnis hängt also davon ab, welche Fassung ein Handler nutzt; einen globalen Schalter gibt es nicht. Wo die Anfrage-URL doch gebraucht wird: `getRequestURL(event, { xForwardedProto: true, xForwardedHost: true })` aus `nuxt/server` (nur hinter Caddy).
@@ -50,7 +52,7 @@ Nicht hier: Pakete und Lieferkette (`abhaengigkeiten-und-layer.md`), Formular-Re
 ## Login und Rollen
 
 - **`nuxt-auth-utils` ≥ 0.6** (versiegeltes HttpOnly-Cookie `nuxt-auth-session`). Das Geheimnis heißt dort **`NUXT_APP_SECRET`** (mindestens 32 Zeichen); `NUXT_SESSION_PASSWORD` und `session.password` werden ignoriert.
-  - **Umstieg in einem Schritt:** Beim Update auf ≥ 0.6 `NUXT_APP_SECRET` setzen und im selben Schritt `NUXT_SESSION_PASSWORD` aus `.env`, `.env.example`, `nuxt.config.ts` und Startprüfungen entfernen. Nie vorher entfernen (ältere Versionen brauchen es).
+  - **Umstieg in einem Schritt:** `NUXT_APP_SECRET` ist in B/C ohnehin Pflicht (Formular-Mindestzeit). Beim Update auf ≥ 0.6 nur noch `NUXT_SESSION_PASSWORD` aus `.env`, `.env.example`, `nuxt.config.ts` und Startprüfungen entfernen. Nie vorher entfernen (ältere Versionen brauchen es).
   - Das Update meldet alle Nutzer einmal ab: außerhalb der Hauptzeit einspielen und die Kundin vorher informieren (README von atinux/nuxt-auth-utils, „Migrate from v0.5“).
   - Erzeugen: `openssl rand -base64 32` oder `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
   - `maxAge` zählt ab dem letzten Schreiben der Sitzung.
@@ -69,39 +71,22 @@ Nicht hier: Pakete und Lieferkette (`abhaengigkeiten-und-layer.md`), Formular-Re
 
 ## CSRF-Schutz
 
-**Soll, sobald der Layer-Baustein vorliegt**; bis dahin in neuen Projekten nach der Skizze unten. Vorlage: Praxisraum `server/middleware/origin.ts`, aber strenger: Anfragen **ohne** `Origin` an zustandsändernde Routen werden abgelehnt (OWASP CSRF Cheat Sheet). `SameSite` am Cookie ist nur eine zusätzliche Schicht.
-
-```ts
-// server/middleware/origin.ts – Skizze, ungetestet
-const SAFE = new Set(['GET', 'HEAD', 'OPTIONS'])
-// Nur Routen, die sich selbst per Token/Schlüssel absichern. Jede mit Grund.
-const EXEMPT = [
-  '/api/newsletter/unsubscribe', // Ein-Klick-Abmeldung (RFC 8058): Mailanbieter senden ohne Origin
-]
-
-export default defineEventHandler((event) => {
-  if (SAFE.has(event.method) || !event.path.startsWith('/api/')) return
-  if (EXEMPT.some(path => event.path.startsWith(path))) return
-  const origin = getRequestHeader(event, 'origin')
-  let host = ''
-  try { host = origin ? new URL(origin).host : '' } catch {}
-  // Hinter Caddy kommt der Host-Header unverändert an
-  if (getRequestHeader(event, 'sec-fetch-site') === 'cross-site' || host !== getRequestHost(event)) {
-    throw createError({ status: 403, statusText: 'Forbidden', message: 'Anfrage von einer fremden Seite abgelehnt.' })
-  }
-})
-```
-
-Weitere Ausnahmen nur kommentiert, z. B. eine interne Server-zu-Server-API mit Dienst-Schlüssel (Website ↔ Praxisraum, `SERVER.md`).
+**Pflicht in B/C.** Vorlage: Baustein `_bausteine/sicherheit/server/middleware/origin.ts` (geprüft, Freigabe 24.11.2026; im Layer, sobald veröffentlicht). Kopieren statt nachbauen. Verhalten:
+- Prüft alle nicht-GET/HEAD/OPTIONS-Anfragen an **alle** Pfade, nicht nur `/api/**` (sonst kämen kodierte Pfade wie `/%61pi/…` durch). Entschieden von Florian am 27.11.2026.
+- Erlaubt nur, wenn `Origin` gleich `new URL(runtimeConfig.public.siteUrl).origin` ist (Schema + Host + Port). `NUXT_PUBLIC_SITE_URL` ist deshalb Pflicht.
+- Fehlt `Origin` oder ist er `null` (Seiten mit `referrer-policy: no-referrer`, z. B. Newsletter), nur mit `Sec-Fetch-Site: same-origin` erlaubt. Ohne beide Header, bei `same-site` oder `cross-site` → 403 (OWASP CSRF Cheat Sheet, Fetch Metadata).
+- Ausnahmen nur als exakte Pfade mit Kommentar und Grund, nur für Routen, die sich selbst per Token oder Dienst-Schlüssel absichern: Ein-Klick-Abmeldung (RFC 8058, Mailanbieter senden ohne Origin), interne Server-zu-Server-API (Website ↔ Praxisraum, `SERVER.md`).
+- `SameSite` am Cookie ist nur eine zusätzliche Schicht.
+- Projekte mit eigener, mindestens gleich strenger Lösung (Gora) behalten sie, müssen aber dieselben Fälle erfüllen (Tests).
 Achtung: Ein POST per `$fetch` während des SSR an die eigene API hat kein `Origin` und bekäme 403. Solche Aufrufe vermeiden und serverseitig direkt die Funktion aus `server/utils` aufrufen.
 
 ## Formularschutz (Technik)
 
-Welche Formulare was brauchen, steht in `formulare-und-datenschutz.md`. Vorlage: `Vogelperspektive/webapp/Vogelperspektive/server/utils/security.ts` (kommt in den Layer).
+Welche Formulare was brauchen, steht in `formulare-und-datenschutz.md`. Vorlage: alle Dateien aus `_bausteine/sicherheit/` (u. a. `server/utils/security.ts`, `form-token.ts`, `form-token-core.ts`, `site-url.ts`, `server/api/form-token.get.ts`, `shared/zod.ts`, `app/composables/useFormToken.ts`; Freigabe 24.11.2026, Anleitung in `STATUS.md` und README des Bausteins). Ohne `form-token.get.ts` scheitert `useFormToken`.
 - **Client-IP:** Caddy **ersetzt** `X-Forwarded-For` bei nicht vertrauenswürdigen Clients; der Header enthält dann nur die echte Client-IP. Die Vorlage nimmt den **letzten** Eintrag: Das ist hinter Caddy dasselbe und bleibt auch dann richtig, wenn ein Proxy davor anhängt. `getRequestIP(event, { xForwardedFor: true })` aus `nuxt/server` nimmt den ersten Eintrag: hinter Caddy identisch, ohne Caddy fälschbar. Steht später ein CDN davor: `trusted_proxies` in Caddy setzen und diese Regel anpassen.
-- **Rate-Limit** `rateLimit(event, key, max, windowMs)` im Arbeitsspeicher, Schlüssel = Zweck + IP (Login zusätzlich + Konto). Reicht bei einem Container. Antwort 429 mit `Retry-After` und deutscher Meldung.
-- **Honeypot** `readForm(event, schema)`: Ist das versteckte Feld `website` gefüllt, gibt die Funktion `null` zurück, und der Handler meldet stillschweigend Erfolg, ohne etwas zu speichern oder zu senden. Erst danach validiert zod.
-- **Mindestzeit (Soll, sobald der Layer-Baustein vorliegt):** Das Formular holt beim Laden ein signiertes Token (HMAC über den Ausstellungszeitpunkt, mit Ablauf). Der Server lehnt Absendungen ab, die schneller als 3 s nach Ausstellung oder nach Ablauf kommen. Bei vorgerenderten Seiten das Token per Anfrage beim Laden holen, nie ins HTML backen.
+- **Rate-Limit** `rateLimit(event, zweck, { max, windowMs, key? })` im Arbeitsspeicher, Schlüssel = Zweck + IP (IPv6 auf /64 gekürzt; Login zusätzlich + Konto). Höchstens 10.000 Einträge, die ältesten fallen weg. Reicht bei einem Container. Antwort 429 mit `Retry-After` und deutscher Meldung, **jede** 429 (auch zweiter Faktor, Anmeldung).
+- **Honeypot, Mindestzeit, Validierung** in `readForm(event, '<formular>', schema)`: zuerst Honeypot (Feld `website` gefüllt → `null`, der Handler meldet stillschweigend Erfolg, ohne zu speichern oder zu senden), dann Mindestzeit, dann zod.
+- **Mindestzeit (Pflicht für die Formulare aus `formulare-und-datenschutz.md`):** Das Formular holt beim Laden per `useFormToken('<formular>')` ein signiertes Token (HMAC über Formularname und Ausstellungszeitpunkt, Schlüssel per HKDF aus `NUXT_APP_SECRET`). Der Server lehnt Absendungen unter 3 s, nach 2 h oder für ein anderes Formular mit 400 ab. Bei vorgerenderten Seiten das Token beim Laden holen, nie ins HTML backen. Das Token ist innerhalb der 2 h mehrfach verwendbar; das Rate-Limit begrenzt das.
 
 ## Sensible Daten, Verschlüsselung, Löschfristen
 
@@ -109,7 +94,7 @@ Welche Formulare was brauchen, steht in `formulare-und-datenschutz.md`. Vorlage:
 - **AES-256-GCM** mit `NUXT_DATA_KEY` (mindestens 32 Zeichen): zufälliger 12-Byte-IV pro Datensatz, Tabelle + ID als AAD (zusätzlich authentifizierte Daten, damit ein Chiffrat nicht in einen anderen Datensatz kopiert werden kann), Schlüsselversion als Präfix (`v1:`) für eine spätere Rotation.
 - `NUXT_DATA_KEY` nie aus `NUXT_APP_SECRET` ableiten. Den Schlüssel getrennt sichern: ohne ihn sind die Daten verloren (Schlüsselliste in `SERVER.md`).
 - Vorlage: `Vogelperspektive/webapp/Vogelperspektive/server/utils/crypto.ts` (Format `v1.`; AAD fehlt dort noch → STANDARDS-AUDIT).
-- **Startprüfung:** Fehlt ein Pflichtgeheimnis oder passt `NUXT_DATA_KEY` nicht zu den Daten, beendet sich die App in Produktion beim Start (Muster Praxisraum `startup-check.ts`), statt erst beim ersten Zugriff zu scheitern.
+- **Startprüfung:** Fehlt ein Pflichtgeheimnis oder passt `NUXT_DATA_KEY` nicht zu den Daten, beendet sich die App in Produktion beim Start (Muster Praxisraum `startup-check.ts`), statt erst beim ersten Zugriff zu scheitern. Dazu gehören `formTokenSecretProblem()` und `siteUrlProblem()` aus dem Baustein (Abbruch ohne Schlüssel oder ohne https-Adresse), entweder über das Plugin `security-startup-check.ts` oder aufgerufen in der vorhandenen `startup-check.ts`.
 - **Löschfristen:** Jede gespeicherte Personenangabe hat eine Frist. Fristen als Konstanten in `shared/`, umgesetzt von einem Nitro-Plugin, das beim Start und regelmäßig aufräumt (Muster Vogelperspektive `server/plugins/cleanup.ts`). Die Fristen stehen in der Datenschutzerklärung.
 
 ## Uploads und Bilder
@@ -122,7 +107,7 @@ Welche Formulare was brauchen, steht in `formulare-und-datenschutz.md`. Vorlage:
 
 - **nodemailer ≥ 10.1.4** über SMTP des eigenen Postfachs (heute dogado, `web116.dogado.net:465`). Kein Mail-Dienstleister.
 - Zugangsdaten nur per Env: `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_SECURE`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS`, dazu `NUXT_MAIL_FROM`, `NUXT_MAIL_TO`.
-- Einen Transporter wiederverwenden. Fehlt die Konfiguration, 503 mit deutscher Meldung. Vorlage: `Vogelperspektive/webapp/Vogelperspektive/server/utils/mail.ts`.
+- Einen Transporter wiederverwenden, mit Timeouts (`connectionTimeout: 10_000`, `greetingTimeout: 10_000`, `socketTimeout: 20_000`); die Standardwerte von nodemailer (2 bzw. 10 min) halten eine Anfrage sonst sehr lange fest. Fehlt die Konfiguration, 503 mit deutscher Meldung. Vorlage: `Ortrud/server/utils/mail.ts`.
 - **Absender ist immer die eigene Adresse**, die Adresse aus dem Formular kommt nur in `replyTo`. Grund: Sonst scheitern SPF/DKIM/DMARC.
 - Immer einen Text-Teil mitschicken, HTML nur zusätzlich. Mailinhalte nicht loggen.
 
@@ -133,7 +118,7 @@ Welche Formulare was brauchen, steht in `formulare-und-datenschutz.md`. Vorlage:
 
 ## Content-Security-Policy (CSP)
 
-- **Eine Quelle je Header:** Die CSP setzt die App über `nuxt-security`, und zwar **nur** `contentSecurityPolicy`; alle anderen Header und Funktionen von `nuxt-security` sind aus. Die übrigen festen Header (HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, `X-Frame-Options`) setzt Caddy (`SERVER.md`). `frame-ancestors` steht in Modus B/C in der App-CSP, in Modus A in Caddy, nie doppelt.
+- **Eine Quelle je Header:** Die CSP setzt die App über `nuxt-security`, und zwar **nur** `contentSecurityPolicy`; alle anderen Header und Funktionen von `nuxt-security` sind aus. Die übrigen festen Header (HSTS, `X-Content-Type-Options`, `Permissions-Policy`, COOP/CORP, `X-Frame-Options`) setzt Caddy (`SERVER.md`). `Referrer-Policy` setzt Caddy nur als Vorgabe (`?`); Seiten mit Token im Link setzen `no-referrer` per `routeRules`. `frame-ancestors` steht in Modus B/C in der App-CSP, in Modus A in Caddy, nie doppelt.
 - Grund: Nur die App kennt Nonces und Hashes. Ohne `'unsafe-inline'` in `script-src` wird eingeschleustes Skript nicht ausgeführt.
 - Prerenderte Seiten bekommen die CSP im Header und als Meta-Tag mit sha256-Hashes der Inline-Skripte und SRI-Hashes; SSR- und `ssr: false`-Seiten bekommen eine Nonce. `sri` und `ssg` von `nuxt-security` an lassen (Standard), sonst greifen die Hashes mit `'strict-dynamic'` nicht.
 - **Modus A** (`nuxt generate`): Es gilt die Meta-CSP. `frame-ancestors` entfernt `nuxt-security` aus dem Meta-Tag automatisch (wirkt dort nicht), deshalb in Caddy.
@@ -142,10 +127,14 @@ Welche Formulare was brauchen, steht in `formulare-und-datenschutz.md`. Vorlage:
 - Inline-Skripte im `<head>` (z. B. der Farbmodus-Umschalter gegen Aufblitzen, `formulare-und-datenschutz.md`) brauchen auf vorgerenderten Seiten den Hash bzw. bei SSR die Nonce. Nach jeder Änderung des Skripts Konsole prüfen.
 - Echtzeit/Video (Praxisraum, eigener Server laut `SERVER.md`) braucht zusätzlich `connect-src` mit den `wss:`-Adressen von LiveKit und Hocuspocus.
 
-Geprüfte Konfiguration (Pilottest 21.11.2026, `nuxt-security` 2.7.0, Nuxt 4.6.4), in `nuxt.config.ts` mit `modules: ['nuxt-security', …]`:
+**Vorlage:** `_bausteine/sicherheit/csp.ts` mit `createSecurityConfig({ mode, reportOnly, connectSrc, scriptSrcAttrHashes })` (geprüft 24.11.2026). Sie setzt zusätzlich `default-src`, `connect-src`, `manifest-src` und `worker-src` auf `'self'` und den `script-src-attr`-Hash nur, wenn das Projekt `@nuxt/image` mit `onerror` nutzt. Das Beispiel unten zeigt den Aufbau (Pilottest 21.11.2026, `nuxt-security` 2.7.0, Nuxt 4.6.4), in `nuxt.config.ts` mit `modules: ['nuxt-security', …]`:
 
 ```ts
+const reportOnly = true // Report-Only-Phase; zum Scharfschalten false (dann auch ssg.meta wieder an)
+
 security: {
+  contentSecurityPolicyReportOnly: reportOnly,
+  ...(reportOnly ? { ssg: { meta: false } } : {}),
   headers: {
     contentSecurityPolicy: {
       'base-uri': ["'none'"], 'object-src': ["'none'"],
@@ -153,7 +142,7 @@ security: {
       'script-src-attr': ["'unsafe-hashes'", "'sha256-bwK6T5wZVTANitXbrTsel7kl/PyCjCd/Dq5Qoz3imjM='"], // onerror von @nuxt/image
       'style-src': ["'self'", "'unsafe-inline'"], 'img-src': ["'self'", 'data:'],
       'font-src': ["'self'"], 'form-action': ["'self'"], 'frame-ancestors': ["'none'"],
-      'upgrade-insecure-requests': true,
+      'upgrade-insecure-requests': !reportOnly, // im Report-Only-Header meldet Chrome die Direktive als Fehler
     },
     crossOriginResourcePolicy: false, crossOriginOpenerPolicy: false, crossOriginEmbedderPolicy: false,
     originAgentCluster: false, referrerPolicy: false, strictTransportSecurity: false,
@@ -165,4 +154,7 @@ security: {
 },
 ```
 
+- `reportOnly` ist dieselbe Konstante wie `contentSecurityPolicyReportOnly` (Muster `_bausteine/sicherheit/csp.ts`). Weglassen der Direktive reicht nicht, weil `nuxt-security` sie sonst als Standard setzt.
+- **zod 4 und CSP:** zod prüft beim ersten Schema per `new Function('')`, ob JIT möglich ist; ohne `'unsafe-eval'` meldet die CSP einen Verstoß. Deshalb `z.config({ jitless: true })` vor dem ersten Schema, über die Vorlage `_bausteine/sicherheit/shared/zod.ts`; Schemas importieren `z` von dort.
+- `X-Powered-By: Nuxt` entfernt Caddy (`headers-base`), `hidePoweredBy` in `nuxt-security` bleibt aus.
 - `@nuxt/image` setzt beim SSR ein `onerror` an `<img>`. Dafür braucht `script-src-attr` `'unsafe-hashes'` und den Hash oben. Der Hash hängt vom genauen Handler-Text ab: nach jedem `@nuxt/image`-Update in der Konsole prüfen.

@@ -14,7 +14,7 @@ paths:
 
 # Tests, Lint und Qualität
 
-Stand: 21.11.2026, ergänzt 25.11.2026. Ergänzt die Kurzfassungen zu Arbeitsweise und Qualität in `WebSites/CLAUDE.md`. Verweise auf `*.md` ohne Pfad meinen `WebSites/.claude/rules/`. CI-Workflow: `ci-workflow.md`. Image-Bau: `container-und-deployment.md`. Barrierefreiheitsprüfung: `barrierefreiheit.md`. Performance-Budget: `performance.md`.
+Stand: 21.11.2026, ergänzt 25. und 27.11.2026. Ergänzt die Kurzfassungen zu Arbeitsweise und Qualität in `WebSites/CLAUDE.md`. Verweise auf `*.md` ohne Pfad meinen `WebSites/.claude/rules/`. CI-Workflow: `ci-workflow.md`. Image-Bau: `container-und-deployment.md`. Barrierefreiheitsprüfung: `barrierefreiheit.md`. Performance-Budget: `performance.md`.
 
 ## Lint und Format
 
@@ -93,6 +93,13 @@ export default defineConfig({
 **SEO-Grundausstattung** (Details: `seo-i18n-inhalte.md`)
 - [ ] `lang`, `titleTemplate`, Beschreibung, `theme-color`, Favicon und Webmanifest, `robots.txt`, `sitemap.xml`, Canonical und hreflang (i18n), og:image.
 - [ ] Beim Relaunch alte URLs per 301/308 auf ihr passendstes Ziel umgeleitet.
+
+**Nach dem Deploy (Staging, dann Live)** (Ablauf: `SERVER.md` 2.7)
+- [ ] Live erhält denselben `@sha256`-Digest, der auf Staging geprüft wurde (`IMAGE_DIGEST`).
+- [ ] Container `healthy`, `curl -fsS https://<domain>/api/health` (B/C).
+- [ ] Header je veröffentlichtem Host: `nginx -t`, dann GET (`curl -sS -D - -o /dev/null …`) auf normale Antwort, App-404, Proxy-Fehler und beide Redirect-Typen getrennt (Force SSL, Redirection-Host). Auf HTTPS jeder Header aus `SERVER.md` 2.5 genau einmal (auch HSTS auf dem HTTPS-Redirect), keine Versionsangabe in `Server`, kein `X-Powered-By`; HTTP nur Status und Ziel. Ersetzt das frühere `caddy validate`.
+- [ ] Anfrage über 1 MB ergibt 413 (Upload-Routen gesondert).
+- [ ] Vor Freigabe des Rate-Limits: Vertrauenskette mit gefälschtem `X-Forwarded-For`/`X-Real-IP` und mitgesendeten `X-Forwarded-Proto`/`-Scheme`/`-Host`, von außen und aus einem Backend-Netz (`SERVER.md` 2.5).
 
 **Eigene Testläufe**
 - **Eigene Tests auf eigenem Port** (aus der Projekt-`CLAUDE.md`, sonst 3456). Port 3000 gehört Florians `npm run dev`. **Prozesse, die ich nicht selbst gestartet habe, nie beenden.**

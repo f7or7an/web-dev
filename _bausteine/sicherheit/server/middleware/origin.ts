@@ -12,7 +12,7 @@
 //   (z. B. /%61pi/…) die Prüfung nicht umgehen.
 //
 // Eigener Ursprung: runtimeConfig.public.siteUrl (NUXT_PUBLIC_SITE_URL). Fehlt sie oder läuft der Dev-Server,
-// gilt Schema + Host der Anfrage (Schema hinter Caddy aus X-Forwarded-Proto). Lokale Tests des Builds
+// gilt Schema + Host der Anfrage (Schema hinter dem Proxy aus X-Forwarded-Proto). Lokale Tests des Builds
 // auf eigenem Port daher mit NUXT_PUBLIC_SITE_URL=http://127.0.0.1:<port> starten.
 import type { RequestEvent } from 'nuxt/server'
 import { createError, defineEventHandler, getRequestHeader, getRequestHost, getRequestProtocol, useRuntimeConfig } from 'nuxt/server'

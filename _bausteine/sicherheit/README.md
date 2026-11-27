@@ -2,7 +2,7 @@
 
 Regeln: `WebSites/.claude/rules/server-und-sicherheit.md` (CSRF, Formularschutz, CSP, `nuxt/server`), `formulare-und-datenschutz.md` (welches Formular was braucht).
 Kommt in den Layer `@f7or7an/nuxt-base`, sobald er veröffentlicht ist. Gilt für Modus B/C; `csp.ts` auch für Modus A.
-Stand 25.11.2026: vom Sicherheitsprüfer freigegeben (Runde 2), danach vier Soll-Punkte ergänzt, zwei Befunde aus Vogelperspektive behoben (zod-Einstellungen im Server-Bundle, Fehlerlog ohne Token) und die Befunde der Prüfrunde 4 zum Fehlerlog umgesetzt (Änderungen unten).
+Stand 25.11.2026, ergänzt 27.11.2026 (Proxy: Nginx Proxy Manager statt Caddy, nur Texte): vom Sicherheitsprüfer freigegeben (Runde 2), danach vier Soll-Punkte ergänzt, zwei Befunde aus Vogelperspektive behoben (zod-Einstellungen im Server-Bundle, Fehlerlog ohne Token) und die Befunde der Prüfrunde 4 zum Fehlerlog umgesetzt (Änderungen unten).
 
 ## Dateien
 
@@ -22,7 +22,7 @@ Stand 25.11.2026: vom Sicherheitsprüfer freigegeben (Runde 2), danach vier Soll
 | `error-log-test-env.ts` | neben `nuxt.config.ts` | `errorLogTestEnv()` für `$env`: zwei Test-Builds (`error-log-test` mit Testrouten, `error-log-baseline` ohne das Plugin) in eigenen Ordnern `.output-error-log-*`. |
 | `tests/build/error-log.mjs`, `tests/build/fixtures/*` | gleich | Build-Test `npm run test:build`: startet beide gebauten Server und vergleicht (Schritt 11). |
 | `app/composables/useFormToken.ts` | gleich | `useFormToken('contact')`: holt das Token beim Einblenden, wartet vor dem Absenden die Mindestzeit ab, erneuert abgelaufene Tokens. |
-| `csp.ts` | neben `nuxt.config.ts` | `createSecurityConfig()` für `nuxt-security`: nur CSP, alle anderen Header aus (setzt Caddy). |
+| `csp.ts` | neben `nuxt.config.ts` | `createSecurityConfig()` für `nuxt-security`: nur CSP, alle anderen Header aus (setzt der Proxy: Nginx Proxy Manager bzw. in Modus A der Nginx-Container, `SERVER.md` 2.5). |
 | `tests/unit/*.test.ts`, `tests/unit/nuxt-server-stub.ts`, `vitest.config.ts` | gleich | 70 Unit-Tests; der Stub ersetzt `nuxt/server` per Alias. |
 
 Alle Server-Helfer nehmen ein `RequestEvent` und nutzen nur Helfer aus `nuxt/server`. **Jeder Handler, der sie aufruft, nutzt `defineEventHandler` aus `nuxt/server`** (sonst Typfehler bzw. `NUXT_E8012`). Server-Dateien importieren ausdrücklich (relative Pfade), damit sie ohne Nuxt testbar sind.
@@ -94,7 +94,7 @@ Alle Server-Helfer nehmen ein `RequestEvent` und nutzen nur Helfer aus `nuxt/ser
    modules: ['nuxt-security', …],
    // B/C, erste Phase: beobachten (Header Report-Only, kein Meta-Tag)
    security: createSecurityConfig({ mode: 'server', reportOnly: true, scriptSrcAttrHashes: [IMAGE_ONERROR_HASH] }),
-   // A (nuxt generate): nur Meta-Tag; frame-ancestors steht in Caddy
+   // A (nuxt generate): nur Meta-Tag; frame-ancestors steht in der nginx.conf des Nginx-Containers
    security: createSecurityConfig({ mode: 'static', scriptSrcAttrHashes: [IMAGE_ONERROR_HASH] }),
    ```
    - `IMAGE_ONERROR_HASH` nur mit `@nuxt/image`; nach jedem `@nuxt/image`-Update Konsole prüfen.
@@ -124,7 +124,7 @@ Alle Server-Helfer nehmen ein `RequestEvent` und nutzen nur Helfer aus `nuxt/ser
 | anderer `Origin` (auch `https` statt `http` oder anderer Port) | 403 |
 
 - **Warum `null` erlaubt sein muss:** `/newsletter/**` hat `referrer-policy: no-referrer` (`formulare-und-datenschutz.md`). Ein echtes `<form method="post">` sendet dort `Origin: null`, nach dem Fetch-Standard auch ein same-origin-`fetch`. Den Header `Sec-Fetch-Site` setzt nur der Browser; Seiten können ihn nicht fälschen. Werkzeuge wie curl können beides fälschen, haben aber keine Cookies der Person: Dagegen schützt CSRF nicht und muss es nicht.
-- **Eigener Ursprung** = `new URL(runtimeConfig.public.siteUrl).origin`. Nur wenn `siteUrl` fehlt (und im Dev-Server): Schema und Host der Anfrage, das Schema hinter Caddy aus `X-Forwarded-Proto`.
+- **Eigener Ursprung** = `new URL(runtimeConfig.public.siteUrl).origin`. Nur wenn `siteUrl` fehlt (und im Dev-Server): Schema und Host der Anfrage, das Schema hinter dem Proxy aus `X-Forwarded-Proto` (NPM übernimmt dafür auch einen vom Client gesendeten Wert; deshalb ist `NUXT_PUBLIC_SITE_URL` in Produktion Pflicht).
 - Geprüft wird jeder Pfad, nicht nur `/api/**` (h3 dekodiert den Pfad fürs Routing, `/%61pi/…`).
 
 ## Fehlerlog (Nitro-Hook `error`)
@@ -143,7 +143,7 @@ Nitro schreibt bei unbehandelten Fehlern standardmäßig `[request error] [unhan
 
 - Ein Token gilt nur für sein Formular (Formularname im HMAC), ist aber **mehrfach verwendbar**, solange es gültig ist (3 s bis 2 h nach Ausstellung). Ein Bot, der das Token holt und 3 s wartet, kommt durch; dagegen helfen Rate-Limit (je IP, IPv6 je /64) und Honeypot. Einmal-Tokens bräuchten Speicher auf dem Server und sind bewusst nicht gebaut (YAGNI); bei echtem Spam erst ALTCHA erwägen (`formulare-und-datenschutz.md`).
 - Rate-Limit im Arbeitsspeicher: höchstens 10.000 Zähler, danach fallen die ältesten weg; Schlüssel auf 128 Zeichen gekürzt. Reicht für einen Container.
-- **Restrisiko:** Ist der Speicher voll, kann jemand mit mehr als 10.000 IPv4-Adressen bzw. IPv6-/64-Netzen (z. B. ein Botnetz) fremde Zähler verdrängen und damit das Rate-Limit für einzelne Adressen zurücksetzen. Die Obergrenze schützt den Speicher, nicht gegen verteilte Angriffe. Dagegen helfen Honeypot und Mindestzeit weiter; bei Bedarf Rate-Limit zusätzlich in Caddy oder ein Speicher mit Persistenz (wie Goras DB-Buckets).
+- **Restrisiko:** Ist der Speicher voll, kann jemand mit mehr als 10.000 IPv4-Adressen bzw. IPv6-/64-Netzen (z. B. ein Botnetz) fremde Zähler verdrängen und damit das Rate-Limit für einzelne Adressen zurücksetzen. Die Obergrenze schützt den Speicher, nicht gegen verteilte Angriffe. Dagegen helfen Honeypot und Mindestzeit weiter; bei Bedarf Rate-Limit zusätzlich im Proxy (NPM) oder ein Speicher mit Persistenz (wie Goras DB-Buckets).
 
 ## Gora (eigene Architektur, Stand 21.11.2026, nur gelesen)
 
@@ -176,7 +176,7 @@ Nitro schreibt bei unbehandelten Fehlern standardmäßig `[request error] [unhan
   - Browser (Headless-Chrome per CDP, `tools/cdp-zod-client.mjs`, scharfe CSP): Im Client-Bundle steht `configureZod()` vor dem ersten Schema; das Formular zeigt bei zu langem Namen „Fehler: Zu groß: erwartet, dass string <=20 Zeichen hat“, keine CSP-Meldung, keine Konsolenausgabe.
   - Layer-Spielwiese gebaut: `/api/demo` mit 101 Zeichen → deutscher Text. Fehlerlog dort seit Runde 4 per Build-Test (nächster Punkt); die Testroute `/api/fehler/<token>` ist entfallen.
 - **Build-Test `npm run test:build` (24./25.11.2026, Prüfrunde 4, Testprojekt und Layer-Spielwiese, Port 3466):** 11 Fälle, je Fall Vergleich mit dem Build ohne Plugin: unbehandelt (JSON), Token im Pfad (23 Zeichen mit E-Mail in der Query, `v1.1800000000000.abcDEF`, Base64 mit `=`, kurz `a1b2c3`), `fatal` 422 als JSON und als HTML, 503 mit `data`, 400 (kein Log), Seite `fatal` 404 (HTML, Token im Pfad), Seite unbehandelt (HTML). Ergebnis: Antworten gleich (HTML ohne Nonce und `buildId` verglichen), je Fall genau die erwartete Zahl JSON-Zeilen, kein `[request error]`, keine Zeile `at …` außerhalb des JSON, keine Meldung, E-Mail oder Token im Log. Gegenprobe 1: Der Vergleichsbuild loggt `[request error]` (prüft der Test selbst). Gegenprobe 2: Mit dem alten Verhalten (`fatal` immer neutralisiert) schlägt der Test fehl (fatal 422 HTML, Seite fatal 404 HTML).
-- Nicht geprüft: hinter echtem Caddy (Host-Header, `X-Forwarded-For`/`-Proto`), Gora-Einbau.
+- Nicht geprüft: hinter dem echten Proxy (Nginx Proxy Manager: Host-Header, `X-Forwarded-For`/`-Proto`, Trust-Kette der Real-IP, `SERVER.md` 2.5), Gora-Einbau.
 
 ## Änderungen 21.11.2026 (nach Prüfung)
 

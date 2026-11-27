@@ -10,9 +10,10 @@ import { FORM_TOKEN_FIELD, HONEYPOT_FIELD } from '../../shared/utils/form-protec
 import { requireFormToken } from './form-token'
 
 /**
- * Echte Client-IP hinter Caddy: der LETZTE Eintrag in X-Forwarded-For.
- * Caddy ersetzt den Header bei fremden Clients; hängt später ein Proxy davor an,
- * bleibt der letzte Eintrag trotzdem der, den Caddy gesehen hat. Ohne Header (lokal): Socket-Adresse.
+ * Echte Client-IP hinter Nginx Proxy Manager: der LETZTE Eintrag in X-Forwarded-For.
+ * NPM hängt die Adresse des Peers an ($proxy_add_x_forwarded_for); was der Client selbst mitschickt,
+ * steht davor und wird ignoriert. Trust-Kette der Real-IP vor Live prüfen (WebSites/SERVER.md 2.5).
+ * Ohne Header (lokal): Socket-Adresse.
  */
 export function getClientIp(event: RequestEvent): string {
   const forwarded = getRequestHeader(event, 'x-forwarded-for')

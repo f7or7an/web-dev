@@ -95,7 +95,7 @@ describe('Middleware', () => {
   it('lässt ohne siteUrl die eigene Seite (Schema + Host der Anfrage) durch', () => {
     expect(originMiddleware(post('http://example.org/api/contact', { host: HOST, origin: `http://${HOST}` }))).toBeUndefined()
     expect(() => originMiddleware(post('http://example.org/api/contact', { host: HOST, origin: SITE }))).toThrow()
-    // hinter Caddy: Schema aus X-Forwarded-Proto
+    // hinter dem Proxy: Schema aus X-Forwarded-Proto
     expect(originMiddleware(post('http://example.org/api/contact', { 'host': HOST, 'origin': SITE, 'x-forwarded-proto': 'https' }))).toBeUndefined()
   })
 

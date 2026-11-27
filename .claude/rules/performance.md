@@ -8,8 +8,8 @@ paths:
 
 # Performance: Rendern, Bilder, Schriften, Budgets
 
-Gilt für alle Projekte unter `WebSites/`. Stand: 21.11.2026, ergänzt 25.11.2026.
-Render-Modi A/B/C stehen im Kern (`CLAUDE.md`). Nitro-Cache und SQLite-Einstellungen: `WebSites/.claude/rules/server-und-sicherheit.md`. Datenladen mit `useAsyncData`: `WebSites/.claude/rules/vue-und-komponenten.md`. Caddy-Datei pro Projekt: `WebSites/.claude/rules/container-und-deployment.md`; Cache-Header Modus A: `WebSites/SERVER.md` 2.5 (Snippet `static`). Prüfablauf vor dem Deployment: `WebSites/.claude/rules/tests-und-qualitaet.md`.
+Gilt für alle Projekte unter `WebSites/`. Stand: 21.11.2026, ergänzt 25. und 27.11.2026.
+Render-Modi A/B/C stehen im Kern (`CLAUDE.md`). Nitro-Cache und SQLite-Einstellungen: `WebSites/.claude/rules/server-und-sicherheit.md`. Datenladen mit `useAsyncData`: `WebSites/.claude/rules/vue-und-komponenten.md`. Proxy-Beschreibung und `nginx.conf` pro Projekt: `WebSites/.claude/rules/container-und-deployment.md`; Cache-Header Modus A: `WebSites/SERVER.md` 2.5a (Nginx-Container). Prüfablauf vor dem Deployment: `WebSites/.claude/rules/tests-und-qualitaet.md`.
 
 ## Rendern und Cachen
 
@@ -97,10 +97,10 @@ Grundsatz 1 (keine fremden Dienste) gilt auch beim Build: Schriften kommen als n
 
 ## Kompression und Auslieferung
 
-- Modus A: `nitro: { compressPublicAssets: { gzip: true, brotli: true } }`, damit beim Build `.br`- und `.gz`-Dateien entstehen. Caddy liefert sie mit `file_server { precompressed br zstd gzip }` aus.
-- Dynamische Antworten (Modus B/C) komprimiert Caddy mit `encode zstd gzip`. HTTP/3 ist in Caddy Standard.
-- **Audio und Video mit Spulfunktion (Modus B/C):** Nitro liefert `public/` ohne HTTP-Range aus (kein 206, kein `Accept-Ranges`). Der Browser kann dann nicht spulen, auch nicht per Tastatur. Solche Medien deshalb über eine eigene Route mit fester Namensliste ausliefern und den Dateinamen nie als Pfad übernehmen. Muster: Ortrud `server/routes/hoerproben/[file].ts`, `server/utils/byte-range.ts`, `shared/utils/audio-files.ts`. Der E2E-Test prüft, dass `Range: bytes=0-99` 206 mit `Content-Range` ergibt. In Modus A beantwortet Caddy `file_server` Range selbst.
-- Cache-Header für `/_nuxt/*` und HTML in Modus A (inkl. Ausnahme `/_nuxt/builds/latest.json`): `WebSites/SERVER.md` 2.5 (Snippet `static`).
+- Modus A: `nitro: { compressPublicAssets: { gzip: true, brotli: true } }`, damit beim Build `.br`- und `.gz`-Dateien entstehen. Der Nginx-Container liefert die `.gz`-Dateien mit `gzip_static on` aus (die Vorlage nutzt nur `gzip_static`, `.br` bleibt ungenutzt). Kompression und Cache-Header auch über den äußeren Proxy (NPM) prüfen (`SERVER.md` 2.5a).
+- Dynamische Antworten (Modus B/C): Kompression über NPM, vor Live prüfen (GET mit `curl -sS -D - -o /dev/null -H 'Accept-Encoding: gzip'`, `SERVER.md` 2.5).
+- **Audio und Video mit Spulfunktion (Modus B/C):** Nitro liefert `public/` ohne HTTP-Range aus (kein 206, kein `Accept-Ranges`). Der Browser kann dann nicht spulen, auch nicht per Tastatur. Solche Medien deshalb über eine eigene Route mit fester Namensliste ausliefern und den Dateinamen nie als Pfad übernehmen. Muster: Ortrud `server/routes/hoerproben/[file].ts`, `server/utils/byte-range.ts`, `shared/utils/audio-files.ts`. Der E2E-Test prüft, dass `Range: bytes=0-99` 206 mit `Content-Range` ergibt. In Modus A beantwortet Nginx Range-Anfragen selbst.
+- Cache-Header in Modus A: HTML und `/_nuxt/builds/` (u. a. `latest.json`) revalidieren, übrige `/_nuxt/`-Assets 365 Tage (`nginx.conf`, `WebSites/SERVER.md` 2.5a).
 
 ## Budgets und Messung
 

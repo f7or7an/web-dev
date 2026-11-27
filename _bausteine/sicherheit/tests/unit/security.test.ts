@@ -26,7 +26,7 @@ function readyToken(form = 'contact') {
 }
 
 describe('getClientIp', () => {
-  it('nimmt den letzten Eintrag aus X-Forwarded-For (hinter Caddy)', () => {
+  it('nimmt den letzten Eintrag aus X-Forwarded-For (hinter NPM: angehängter Peer)', () => {
     const event = createTestEvent('http://localhost/', { headers: { 'x-forwarded-for': '1.2.3.4, 198.51.100.9' } })
     expect(getClientIp(event)).toBe('198.51.100.9')
   })

@@ -3,7 +3,9 @@ paths:
   - "**/Dockerfile"
   - "**/.dockerignore"
   - "**/compose*.yml"
+  - "**/compose*.yaml"
   - "**/deploy/**"
+  - "**/nginx.conf"
   - "**/*.caddy"
   - "**/Caddyfile"
   - "**/*entrypoint*"
@@ -12,24 +14,24 @@ paths:
 
 # Container und Deployment (projektseitig)
 
-Stand 21.11.2026. Vorlagen für die Dateien im Projekt-Repo, Modus B und C. GitHub-Actions-Workflow: `WebSites/.claude/rules/ci-workflow.md`. Serverseite (Caddy-Snippets, Netze anlegen, Komodo, Backups, Schlüssel, Praxisraum-Server): `WebSites/SERVER.md`. Prüfschritte vor dem Deployment: `WebSites/.claude/rules/tests-und-qualitaet.md`. Platzhalter: `<name>` = Projektname = Containername, `<domain>` = Hauptdomain.
+Stand 21.11.2026, ergänzt 27.11.2026 (Webserver: Nginx Proxy Manager statt Caddy). Vorlagen für die Dateien im Projekt-Repo, Modus B und C, dazu der Nginx-Container für Modus A. GitHub-Actions-Workflow: `WebSites/.claude/rules/ci-workflow.md`. Serverseite (NPM, Header-Soll, Netze, Arcane, Backups, Schlüssel, Praxisraum-Server): `WebSites/SERVER.md`. Prüfschritte vor dem Deployment: `WebSites/.claude/rules/tests-und-qualitaet.md`. Platzhalter: `<name>` = Projektname (= Image-Name), `<stack>` = `<name>-staging` bzw. `<name>-live` (= Arcane-Projekt = Containername = Hostname für NPM), `<domain>` = Hauptdomain.
 
 ## Grundregeln
 
-- Der Server baut nichts. GitHub Actions baut das Image und legt es als `ghcr.io/f7or7an/<name>:<git-sha>` ab (privat). Rückweg = vorigen SHA deployen.
+- Der Server baut nichts. GitHub Actions baut das Image und legt es als `ghcr.io/f7or7an/<name>:<git-sha>` ab (privat). Arcane zieht es per Digest (`IMAGE_DIGEST`), erst Staging, dann Live mit demselben Digest. Rückweg = vorigen Digest deployen (`SERVER.md` 2.7).
 - Basis-Image `node:26-slim` (Debian, glibc) mit **vollem Versions-Tag und Digest** (`node:26.13.1-slim@sha256:…`), Renovate aktualisiert beides (Regeln in `WebSites/.claude/rules/abhaengigkeiten-und-layer.md`). Nicht Alpine: Node stuft musl als „Experimental“ ein (nodejs/node `BUILDING.md`). Optional Docker Hardened Images (`dhi.io/node:26`).
 - Build-Stage mit npm ≥ 12.2.2 (Node 26 bringt npm 11 mit) und `npm ci`. Nicht freigegebene Installationsskripte von Abhängigkeiten sind ein Fehler (`strict-allow-scripts`). Freigaben in `package.json` → `allowScripts`.
 - Token für das private Layer-Paket `@f7or7an/nuxt-base` (sobald veröffentlicht; bis dahin `_bausteine/`) nur als Build-Secret: nie per `ARG`/`ENV`, nie in einer Image-Schicht, nie in der `.npmrc` im Repo.
-- Laufzeit nur `.output`, User `node`, `CMD` in Exec-Form direkt auf Node (nie `npm start`: npm leitet SIGTERM nicht sauber weiter). Healthcheck mit Node selbst, slim hat weder curl noch wget.
-- Keine `ports:` im App-Stack (Docker umgeht ufw). Auf dem Webserver veröffentlicht ausnahmslos nur Caddy Ports. Einzige Ausnahme überhaupt: die LiveKit-Medien-Ports im Praxisraum-Stack auf dem Praxisraum-Server (`SERVER.md` 2.14), nie entfernen. Debug nur `127.0.0.1:<port>:3000`, danach entfernen.
-- Eigenes Netz `<name>-proxy` (extern, auf dem Server angelegt), kein gemeinsames Netz `web`: Ein fremder Container könnte sich dort den Alias `<name>` geben.
-- Daten nur in `/app/.data` (Volume). Dateisystem sonst schreibgeschützt.
+- Laufzeit nur `.output`, User `node`, `CMD` in Exec-Form direkt auf Node (nie `npm start`: npm leitet SIGTERM nicht sauber weiter). Für `NUXT_DATA_KEY` gibt es einen Entwurf der Server-Session mit Start-Wrapper (lädt den Schlüssel aus einer eingebundenen Datei, dann `exec node`; `SERVER.md` 2.10): noch keine Vorlage, vor Einsatz testen. Healthcheck mit Node selbst, slim hat weder curl noch wget.
+- Keine `ports:` im App-Stack (Docker umgeht ufw). Auf dem Webserver veröffentlicht ausnahmslos nur Nginx Proxy Manager (NPM) Web-Ports. Einzige Ausnahme überhaupt: die LiveKit-Medien-Ports im Praxisraum-Stack auf dem Praxisraum-Server (`SERVER.md` 2.14), nie entfernen. Debug auch ohne `ports:`: per SSH-Tunnel zu einer privaten Route oder per Test aus dem Docker-Netz (`SERVER.md` 2.2).
+- Eigenes Netz `<stack>-proxy` je Staging- und Live-Stack (`external: true`, auf dem Server angelegt, NPM angehängt), kein gemeinsames Netz `web`: Ein fremder Container könnte sich dort den Alias `<stack>` geben. Die App hängt nur in diesem Netz.
+- Daten nur in `/app/.data` (Volume `/srv/apps/<stack>/data`). Dateisystem sonst schreibgeschützt.
 
 ## Dockerfile
 
 ```dockerfile
 # syntax=docker/dockerfile:1
-# Vorlage: WebSites/.claude/rules/container-und-deployment.md (21.11.2026)
+# Vorlage: WebSites/.claude/rules/container-und-deployment.md (27.11.2026)
 # Tag + Digest pflegt Renovate (Digest-Updates nach 3 Tagen, neue Versionen nach 14)
 
 # --- Build ---
@@ -50,7 +52,7 @@ RUN npm run build
 
 # --- Laufzeit: nur die gebaute App ---
 FROM node:26.13.1-slim@sha256:<digest>
-# HOST=0.0.0.0: im Container nötig, damit Caddy die App erreicht.
+# HOST=0.0.0.0: im Container nötig, damit der Proxy (NPM) die App erreicht.
 # Die Regel „Dev-Server nie mit --host“ betrifft nur nuxt dev auf dem eigenen Rechner.
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
@@ -77,15 +79,16 @@ CMD ["node", ".output/server/index.mjs"]
 ## compose.yml
 
 ```yaml
-# Stack <name> ohne Proxy (SERVER.md 2.4–2.7). Caddy erreicht die App über das Netz <name>-proxy.
-# Komodo setzt TAG (Git-SHA) und für Staging STACK=<name>-staging.
+# Stack <stack> ohne Proxy (SERVER.md 2.4–2.7). NPM erreicht die App über das Netz <stack>-proxy
+# unter http://<stack>:3000. Arcane setzt IMAGE_DIGEST (sha256:… des geprüften Images; der SHA-Tag
+# ist nur der Veröffentlichungsname in GHCR). Den Stacknamen trägt der Generator der Server-Session fest ein.
 services:
   app:
-    image: ghcr.io/f7or7an/<name>:${TAG:?TAG fehlt (Git-SHA des Images)}
-    container_name: ${STACK:-<name>}          # = Hostname in deploy/<domain>.caddy
+    image: ghcr.io/f7or7an/<name>@${IMAGE_DIGEST:?IMAGE_DIGEST fehlt (sha256:… des geprüften Images)}
+    container_name: ${STACK:-<name>}          # = Hostname im NPM-Ziel
     restart: unless-stopped
     init: true                                # leitet Signale weiter, räumt Zombie-Prozesse ab
-    env_file: .env                            # bzw. Variablen aus Komodo
+    env_file: .env                            # .env im Arcane-Projekt, chmod 600
     volumes:
       - /srv/apps/${STACK:-<name>}/data:/app/.data
     networks: [proxy]
@@ -108,14 +111,17 @@ networks:
 ```
 
 - Kein `build:` (der Server baut nicht), kein `ports:` (einzige Ausnahme siehe Grundregeln) und kein `docker.sock`.
+- Image **nur** per `@${IMAGE_DIGEST:?…}`, kein Tag. `${STACK:-<name>}` an genau drei Stellen (Containername, Datenpfad, Netzname). Arcane setzt kein `STACK`: Der Generator der Server-Session macht daraus `<name>-staging` bzw. `<name>-live` und schreibt die Arcane-Ausgabe mit Digest und festem Stacknamen. Daten je Stack unter `/srv/apps/<stack>/data` (→ `/app/.data`), Besitzer UID 1000.
+- Das Installationsskript der Server-Session stoppt, wenn eine vorhandene Arcane-Compose abweicht: Änderungen an dieser Datei gezielt mit der Server-Session abgleichen.
+- Healthcheck: `HEALTHCHECK` aus dem Dockerfile (`/api/health`). Das Anbindeskript der Server-Session hängt NPM erst an, wenn der Container `healthy` ist und keine `ports:` hat.
 - Bei `mem_limit` ab 1 GB den Node-Heap darunter halten: `environment: { NODE_OPTIONS: --max-old-space-size=768 }` (Muster Praxisraum).
-- Datenaustausch mit einem anderen Stack auf demselben Server nur über ein eigenes `internal`-Netz mit festen Adressen, eingetragen in `SERVER.md` 2.4. Über Servergrenzen (Website ↔ Praxisraum) über WireGuard und die interne Caddy-Schnittstelle (`SERVER.md` 2.15), nie über ein veröffentlichtes App-Port.
-- Lokal testen (selten nötig): `docker build --secret id=npmrc,src=$HOME/.npmrc -t ghcr.io/f7or7an/<name>:local .`, `docker network create <name>-proxy`, dann `TAG=local docker compose up`.
+- Datenaustausch mit einem anderen Stack auf demselben Server nur über ein eigenes `internal`-Netz mit festen Adressen, eingetragen in `SERVER.md` 2.4. Über Servergrenzen (Website ↔ Praxisraum) über WireGuard und die interne Schnittstelle (`SERVER.md` 2.15, auf dem Webserver mit NPM noch offen), nie über ein veröffentlichtes App-Port.
+- Lokal testen (selten nötig): `docker build --secret id=npmrc,src=$HOME/.npmrc -t ghcr.io/f7or7an/<name>:local .`, `docker network create <name>-proxy`, für den Test die Image-Zeile vorübergehend auf `ghcr.io/f7or7an/<name>:local` setzen (nicht committen), dann `docker compose up`.
 
 ## Healthcheck `/api/health`
 
 ```ts
-// server/api/health.get.ts – für Docker-Healthcheck und Uptime Kuma
+// server/api/health.get.ts – für Docker-Healthcheck und externes Monitoring
 import { createError, defineEventHandler } from 'nuxt/server'
 
 // pingDb: eigene Funktion aus server/utils (darf auto-importiert sein),
@@ -138,26 +144,42 @@ export default defineEventHandler(async () => {
 - Vorlage: Praxisraum `server/utils/db.ts` (`migrate()`) und `server/plugins/startup-check.ts`.
 - Vor dem Deploy legt der Server einen SQLite-Snapshot an (`SERVER.md` 2.7). Migrationen nur additiv (Spalten mit Standardwert, neue Tabellen), damit der vorige SHA auf der neuen Datenbank weiterläuft. Geht das nicht, steht es als Kommentar in der Migration, und der Rückweg braucht den Snapshot.
 
-## Caddy-Datei pro Projekt
+## Proxy-Beschreibung pro Projekt (Nginx Proxy Manager)
 
-`deploy/<domain>.caddy`, wird nach `/srv/proxy/sites/` kopiert. Snippets `app`, `app-media`, `static`, `security`, `staging` stehen im zentralen Caddyfile (`SERVER.md` 2.5). Vor Einsatz `caddy validate`.
+Auf dem Webserver gibt es keine Proxy-Datei zum Kopieren: Die Proxy-Hosts legt man in der NPM-Oberfläche an (`SERVER.md` 2.5). Das Projekt-Repo hält fest, was dort einzutragen ist, damit es versioniert und prüfbar bleibt:
 
-```caddy
-# deploy/<domain>.caddy – Modus B/C, nach /srv/proxy/sites/ kopieren (SERVER.md 2.5)
-<domain> {
-	@internal path /api/internal/*
-	respond @internal 404        # nur wenn die App interne Routen hat; die gehen über SERVER.md 2.15
-	import app <name>
-}
-www.<domain> {
-	redir https://<domain>{uri} permanent
-}
+- `deploy/<domain>.npm.md`: je Host (Live, `www`, Staging) Domain, Ziel (`http://<name>-live:3000` bzw. `http://<name>-staging:3000`), Netz `<stack>-proxy`, SSL- und HSTS-Schalter (`includeSubDomains` ja/nein mit Grund), `www` → Hauptdomain, Staging mit Zugriffsschutz und `X-Robots-Tag: noindex, nofollow`.
+- `deploy/<domain>.advanced.conf`: Inhalt des Advanced-Felds (nginx-Syntax), nur was nicht schon im gemeinsamen Hook `server_proxy.conf` steht. Für Redirection-Hosts (`www`, Zweitdomain) gilt `server_redirect.conf` und deren eigenes Advanced-Feld. **Soll-Vorlage**, nicht geprüft: NPM setzt in `location /` selbst `add_header X-Served-By`, deshalb erreichen server-weite `add_header` wie unten die normalen Antworten nicht (`SERVER.md` 2.5). Wo die Header stehen, legt die Server-Session fest; maßgeblich ist die Prüfung per GET. Beispiel Modus B/C:
+
+```nginx
+# deploy/<domain>.advanced.conf – Advanced-Feld des NPM-Proxy-Hosts <domain> (SERVER.md 2.5)
+# Soll-Vorlage: Header-Soll aus SERVER.md 2.5, jeder mit always (auch 404/5xx), keiner doppelt.
+# Achtung: wirkt nicht in NPMs location / (eigenes add_header X-Served-By) – Ort mit der Server-Session klären.
+add_header X-Frame-Options "DENY" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+add_header Cross-Origin-Opener-Policy "same-origin" always;
+add_header Cross-Origin-Resource-Policy "same-site" always;
+
+# nur wenn die App interne Routen hat; die gehen über SERVER.md 2.15 (exakt + Präfix)
+location = /api/internal { return 404; }
+location ^~ /api/internal/ { return 404; }
 ```
 
-- Genau ein Snippet pro Site: `app`, `app-media` oder `static`, nie `security` und `security-media` gemischt (sonst zwei `Permissions-Policy`).
-- **Modus A:** `import static <domain>` statt `import app` (setzt auch `frame-ancestors` per Header, weil der CSP-Meta-Tag es nicht kann).
-- **Staging:** zweiter Block `<name>.staging.flow-tech.org` mit `import staging` und `import app <name>-staging`.
-- **Uploads:** `import app` begrenzt jeden Body auf 1 MB. Mit Upload-Route den Block ausschreiben und nur dort mehr erlauben (Vorlage in `SERVER.md` 2.5).
-- **Kamera/Mikrofon (Praxisraum):** `import app-media <name>`; die `wss:`-Adressen von LiveKit und Hocuspocus stehen in der CSP der App (`connect-src`).
-- Keine CSP in B/C (kommt samt `frame-ancestors` aus der App, `WebSites/.claude/rules/server-und-sicherheit.md`) und keine Cache-Header für `/_nuxt` (setzt Nitro).
-- Kommentar am Dateianfang: wohin kopieren, welches Snippet, jede Abweichung mit Grund (Beispiel Gora: eigener Header-Block, HSTS ohne `includeSubDomains`, weil die DNS-Zone bei Wix liegt). Abweichungen zusätzlich in die Tabelle „Abweichungen“ der Projekt-`CLAUDE.md`.
+- **Mit der Server-Session abgleichen** (offen, `SERVER.md` 2.5): welche Header `server_proxy.conf` schon setzt (dann hier weglassen), wie `X-Powered-By` entfernt und die Body-Größe begrenzt wird (Soll 1 MB statt der globalen 2000 MB des Images, 413-Test; eine größere Upload-Location nur mit denselben Zugriffs- und Header-Regeln), HSTS ohne `preload` (der NPM-Schalter hängt es an).
+- **`add_header`-Vererbung:** Ein Block mit eigenem `add_header` erbt die `add_header` der Ebene darüber nicht; dort alle Header wiederholen.
+- **Keine CSP** im Proxy in B/C (kommt samt `frame-ancestors` aus der App, `WebSites/.claude/rules/server-und-sicherheit.md`) und keine Cache-Header für `/_nuxt` (setzt Nitro).
+- **Kamera/Mikrofon (Praxisraum):** Permissions-Policy `camera=(self), microphone=(self), display-capture=(self), fullscreen=(self), geolocation=()`; die `wss:`-Adressen von LiveKit und Hocuspocus stehen in der CSP der App (`connect-src`). Proxy des Praxisraum-Servers offen (`SERVER.md` 2.14).
+- Kommentar am Dateianfang: wohin eintragen, jede Abweichung mit Grund (Beispiel Gora: HSTS ohne `includeSubDomains`, weil die DNS-Zone bei Wix liegt). Abweichungen zusätzlich in die Tabelle „Abweichungen“ der Projekt-`CLAUDE.md`.
+- **Prüfen** nach jeder Änderung (ersetzt `caddy validate`): `nginx -t`, dann GET mit `curl -sS -D - -o /dev/null` auf normale Antwort, App-404, Proxy-Fehler (Staging) und beide Redirect-Typen getrennt (Force SSL, Redirection-Host; `SERVER.md` 2.5). Auf HTTPS jeder Header genau einmal, auch auf 404, Proxy-Fehler und HTTPS-Redirect; HTTP nur Status und Ziel.
+- Alte Caddy-Dateien (`deploy/*.caddy`) sind seit 27.11.2026 historisch (Vorlage: `SERVER.md` Anhang A).
+
+## Modus A: statischer Nginx-Container
+
+Statische Seiten laufen auf dem Webserver in je einem eigenen, nicht privilegierten Nginx-Container mit schreibgeschütztem Build hinter NPM (`SERVER.md` 2.5a, 2.7). Vorlage: `FlowTech/Admin/server/websites/flowtech-preview/` (`compose.yaml`, `nginx.conf`, außerhalb `WebSites/`). Im Projekt-Repo:
+
+- `deploy/nginx.conf`: `server_tokens off`, `absolute_redirect off` (sonst zeigen 301 wie `/pfad` → `/pfad/` hinter NPM auf `http://<container>:8080/…`), `gzip_static on`, Dotfile-Sperre (`location ~ /\. { return 404; }`), HTML und `/_nuxt/builds/` revalidieren, übrige `/_nuxt/`-Assets 365 Tage, `error_page 404 /404.html`, Sicherheits-Header nach `SERVER.md` 2.5 **mit `always`**, dazu `Content-Security-Policy "frame-ancestors 'none'"` (wirkt im Meta-Tag nicht). `X-Robots-Tag: noindex, nofollow` nur in einer Vorschau.
+- `deploy/compose.yaml`: Image mit Tag und Digest, `read_only: true`, nicht-root-Benutzer, `cap_drop: [ALL]`, `no-new-privileges`, tmpfs `/tmp`, Release schreibgeschützt eingebunden, eigenes Netz extern, **kein `ports:`**, HTTP-Healthcheck.
+- `add_header` in einer `location` hebt alle `add_header` der `server`-Ebene auf: Locations mit eigenem `add_header` wiederholen alle Header (`expires` ist kein `add_header`).
+- `nitro.compressPublicAssets` erzeugt die `.gz`-Dateien (`performance.md`). Komprimierung und Cache-Header auch über NPM prüfen.
+- Weiterleitungen alter URLs als echte 301 in `nginx.conf` oder als Redirection-Host in NPM (`seo-i18n-inhalte.md`).
+- Proxy-Host für die Domain wie oben (`deploy/<domain>.npm.md`), Ziel `http://<site>:8080`.

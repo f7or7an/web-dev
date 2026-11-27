@@ -26,7 +26,7 @@ paths:
 
 # Formulare, Datenschutz und Rechtsseiten
 
-Stand: 21.11.2026, ergänzt 24. und 25.11.2026. Keine Rechtsberatung: Grenzfälle an Florian geben, nicht selbst entscheiden.
+Stand: 21.11.2026, ergänzt 24., 25. und 27.11.2026. Keine Rechtsberatung: Grenzfälle an Florian geben, nicht selbst entscheiden.
 Nicht hier: Barrierefreiheit von Formularen (Labels, Fehlermeldungen, `autocomplete`, Fokus: `barrierefreiheit.md`), Server-Technik für Rate-Limit, Honeypot, Login, Verschlüsselung und Löschfristen (`server-und-sicherheit.md`), Seite `/barrierefreiheit` (`barrierefreiheit.md`), Zugriffslog-Einstellungen (`SERVER.md`).
 „Layer“ meint `@f7or7an/nuxt-base`, sobald veröffentlicht; bis dahin die genannte Projektvorlage bzw. `_bausteine/`. Begründete Abweichungen eines Projekts stehen in der Tabelle „Abweichungen“ seiner `CLAUDE.md` (Regel, Abweichung, Grund, von Florian bestätigt am).
 
@@ -109,7 +109,7 @@ In jedes Projekt mit Farbmodus-Umschalter, wörtlich (übersetzt in die anderen 
 
 Jede Speicherung und jede Verarbeitung steht in der Datenschutzerklärung, mit Zweck, Rechtsgrundlage und Frist. Mindestens:
 - **Hosting:** Anbieter des Servers, Auftragsverarbeitungsvertrag (AVV, `SERVER.md`). Keine weiteren Empfänger, kein Tracking, keine fremden Dienste.
-- **Zugriffslogs (Caddy):** aus, oder nur mit gekürzter IP und Löschung nach höchstens 7 Tagen (Einstellung: `SERVER.md`). Rechtsgrundlage Art. 6 Abs. 1 lit. f DSGVO (IT-Sicherheit), Zweck und Frist nennen. Es gibt keine gesetzliche Höchstdauer; die 7 Tage stammen aus der TK-Praxis (BGH III ZR 146/10, BfDI-Leitfaden) und gelten als sicher bis vertretbar.
+- **Zugriffslogs (Proxy):** aus, oder nur mit gekürzter IP und Löschung nach höchstens 7 Tagen (Einstellung: `SERVER.md` 2.5). Achtung: Die Standardwerte von Nginx Proxy Manager erfüllen das nicht (wöchentliche Rotation, 4 Archive, volle IP, Request-URI samt Query, Referer). Bevorzugt Access-Logs aus, sonst gekürztes Format ohne sensible URLs mit geprüfter 7-Tage-Löschung; Error-, Redirect- und Container-Logs gesondert prüfen. Bis zur Umstellung keine 7 Tage als tatsächliche Aufbewahrung in die Datenschutzerklärung schreiben. Rechtsgrundlage Art. 6 Abs. 1 lit. f DSGVO (IT-Sicherheit), Zweck und Frist nennen. Es gibt keine gesetzliche Höchstdauer; die 7 Tage stammen aus der TK-Praxis (BGH III ZR 146/10, BfDI-Leitfaden) und gelten als sicher bis vertretbar.
 - **App-Logs:** enthalten keine Personendaten (`server-und-sicherheit.md`); Aufbewahrung begrenzt (Docker: 10 MB × 3 Dateien) und genannt.
 - **Fehler-Tracking**, falls eingesetzt (optional Bugsink, ohne Personendaten, `SERVER.md`).
 - **Jedes Formular:** welche Daten, wofür, wer sie liest, wann sie gelöscht werden. Mailversand über das eigene Postfach (Anbieter nennen).

@@ -5,7 +5,7 @@ paths:
 
 # CI-Workflow (GitHub Actions)
 
-Stand 21.11.2026, ergänzt 25.11.2026. Vorlage `.github/workflows/ci.yml` für Modus B und C: prüfen, Image bauen, scannen, nach GHCR schieben. Dockerfile und `compose.yml`: `WebSites/.claude/rules/container-und-deployment.md`. Weitere Prüf-Jobs (E2E, Playwright, Integration) und was vor einem Deployment zu prüfen ist: `WebSites/.claude/rules/tests-und-qualitaet.md`. Deploy auf dem Server: `WebSites/SERVER.md` 2.7.
+Stand 21.11.2026, ergänzt 25. und 27.11.2026. Vorlage `.github/workflows/ci.yml` für Modus B und C: prüfen, Image bauen, scannen, nach GHCR schieben. Dockerfile und `compose.yml`: `WebSites/.claude/rules/container-und-deployment.md`. Weitere Prüf-Jobs (E2E, Playwright, Integration) und was vor einem Deployment zu prüfen ist: `WebSites/.claude/rules/tests-und-qualitaet.md`. Deploy auf dem Server: `WebSites/SERVER.md` 2.7.
 
 ## Regeln
 
@@ -94,6 +94,7 @@ jobs:
 - `--ignore-unfixed`: Lücken im Basis-Image ohne verfügbaren Fix brechen nicht ab; sie verschwinden mit dem nächsten Digest-Update. Docker Scout ist als Scanner gleichwertig.
 - Ohne Layer-Paket entfallen `registry-url`/`scope`, `NODE_AUTH_TOKEN` und `secrets:`. Ob `GITHUB_TOKEN` das Paket eines anderen Repos lesen darf, regelt das Paket („Manage Actions access“). Beim Anlegen des Layers prüfen, ebenso ob `npm audit signatures` mit GitHub Packages sauber durchläuft.
 - Der wöchentliche Image-Neubau für Patches des Basis-Images entsteht über die Digest-Updates von Renovate (jedes Update = Commit = neues Image).
+- **Deploy (nicht im Workflow):** Das Image trägt den Git-SHA als Tag (Veröffentlichungsname in GHCR); Deployment-Referenz ist der Digest. Arcane referenziert den geprüften Digest (`image: ghcr.io/f7or7an/<name>@${IMAGE_DIGEST}`, `IMAGE_DIGEST=sha256:…`): erst im Staging-Projekt, nach der Prüfung manuelle Live-Freigabe **desselben** Digests. Den Digest liefert die Ausgabe `digest` des Push-Schritts bzw. `docker buildx imagetools inspect ghcr.io/f7or7an/<name>:<git-sha>`. Kein automatisches Deploy, kein Watchtower (`SERVER.md` 2.7).
 - **Renovate:** `NPM_VERSION` liest der `customManagers`-Eintrag des Presets (`WebSites/.claude/rules/abhaengigkeiten-und-layer.md`, gilt für Dockerfile und Workflows; Kommentar `# renovate: datasource=npm depName=npm` direkt darüber). So laufen Dockerfile und CI nicht auseinander. Für `TRIVY_IMAGE` (Image mit Digest) braucht das Preset einen zweiten Eintrag. Die Regex ist gegen diese Vorlage getestet (JavaScript, 21.11.2026); beim Anlegen mit `renovate-config-validator` und einem Probelauf prüfen:
   ```json
   {
@@ -104,4 +105,4 @@ jobs:
     ]
   }
   ```
-- **Modus A** (statisch) baut kein Image: `npm run generate` und Upload nach `SERVER.md` 2.7. Ein eigener schlanker Workflow (lint, typecheck, generate, `test:chunk-reload`; Vorlage `_bausteine/ci/ci-static.yml`) ist möglich, deployt aber nicht automatisch.
+- **Modus A** (statisch) baut kein Image: `npm run generate`, Archiv mit SHA-256, Release in den Nginx-Container nach `SERVER.md` 2.7. Ein eigener schlanker Workflow (lint, typecheck, generate, `test:chunk-reload`; Vorlage `_bausteine/ci/ci-static.yml`) ist möglich, deployt aber nicht automatisch.

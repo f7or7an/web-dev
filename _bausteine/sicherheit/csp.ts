@@ -1,6 +1,7 @@
 // Herkunft: _bausteine/sicherheit/csp.ts (Stand 21.11.2026)
 // CSP-Grundkonfiguration für nuxt-security (≥ 2.7.0). Regel: WebSites/.claude/rules/server-und-sicherheit.md, Abschnitt CSP.
-// nuxt-security setzt NUR die Content-Security-Policy; alle anderen Header setzt Caddy (eine Quelle je Header).
+// nuxt-security setzt NUR die Content-Security-Policy; alle anderen Header setzt der Proxy (eine Quelle je Header):
+// Nginx Proxy Manager bzw. in Modus A der Nginx-Container (WebSites/SERVER.md 2.5).
 //
 // Einbinden (Datei neben nuxt.config.ts):
 //   import { createSecurityConfig } from './csp'
@@ -13,7 +14,7 @@ type ContentSecurityPolicy = Exclude<Exclude<ModuleOptions['headers'], false>['c
 export interface CspOptions {
   /**
    * `server`: Modus B/C (node-server). CSP im Header, Nonce für SSR, sha256-Hashes für vorgerenderte Seiten.
-   * `static`: Modus A (`nuxt generate`). Nur Meta-Tag mit Hashes; `frame-ancestors` setzt dort Caddy.
+   * `static`: Modus A (`nuxt generate`). Nur Meta-Tag mit Hashes; `frame-ancestors` setzt dort der Nginx-Container.
    */
   mode: 'server' | 'static'
   /**
@@ -57,7 +58,7 @@ export function createSecurityConfig(options: CspOptions): Partial<ModuleOptions
     // Im Report-Only-Header ignoriert der Browser die Direktive und meldet einen Konsolenfehler.
     // Ausdrücklich false: Weglassen reicht nicht, nuxt-security setzt sie sonst als Standard.
     'upgrade-insecure-requests': !reportOnly,
-    // Modus A: wirkt im Meta-Tag nicht, steht in Caddy (nie doppelt)
+    // Modus A: wirkt im Meta-Tag nicht, steht in der nginx.conf des Nginx-Containers (nie doppelt)
     ...(isStatic ? {} : { 'frame-ancestors': ['\'none\''] }),
   }
 
